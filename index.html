@@ -6,23 +6,6 @@
 <title>367の小游戏</title>
 <style>
 :root {
-  --bg: #f7f7f7;
-  --card-bg: #ffffff;
-  --text: #111;
-  --text-glow: rgba(255,255,255,0.95);
-  --border: #ddd;
-  --ring-stroke: #000;
-  --ring-bright: #fff;
-  --dot-color: #000;
-  --hp-empty: #ddd;
-  --hp-full: #111;
-  --hp-glow: rgba(255,255,255,0.85);
-  --shadow: 0 10px 32px rgba(0,0,0,0.08);
-  --trans: all 0.32s cubic-bezier(0.22, 0, 0.2, 1);
-  --ripple-light: rgba(0,0,0,0.1);
-  --ripple-dark: rgba(255,255,255,0.14);
-}
-.dark-mode {
   --bg: #0c0c0c;
   --card-bg: #171717;
   --text: #f1f1f1;
@@ -35,6 +18,9 @@
   --hp-full: #fff;
   --hp-glow: rgba(0,0,0,0.6);
   --shadow: 0 10px 32px rgba(0,0,0,0.35);
+  --trans: all 0.32s cubic-bezier(0.22, 0, 0.2, 1);
+  --ripple-dark: rgba(255,255,255,0.14);
+  --light-radius: 220px;
 }
 * {
   margin: 0;
@@ -51,7 +37,23 @@ body {
   position: relative;
   cursor: none;
 }
-/* 鼠标圆点零延迟 */
+/* 全局黑暗遮罩 */
+.light-mask {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background: radial-gradient(circle var(--light-radius) at var(--mouse-x, 50%) var(--mouse-y, 50%), transparent 0%, rgba(0,0,0,1) 100%);
+}
+/* 正常状态：仅灯光内可见 */
+.light-visible {
+  mix-blend-mode: screen;
+}
+/* 刷新闪烁时：无视遮罩，全局可见 */
+.no-mask {
+  mix-blend-mode: normal !important;
+}
+/* 鼠标光点发光 */
 .mouse-dot {
   position: fixed;
   width: 22px;
@@ -63,40 +65,23 @@ body {
   z-index: 9999;
   transition: none;
   will-change: left, top;
+  box-shadow: 0 0 12px #fff, 0 0 40px rgba(255,255,220,0.5), 0 0 80px rgba(255,255,200,0.3);
 }
-button:hover ~ .mouse-dot {
-  background: var(--bg);
-}
-/* 倒计时黑白闪屏 */
+/* 倒计时遮罩：彻底透明无背景 */
 .count-flash-mask {
   position: fixed;
   inset: 0;
   z-index: 40;
   pointer-events: none;
   opacity: 0;
+  background: transparent !important;
 }
 .count-flash-mask.show {
   opacity: 1;
   pointer-events: all;
+  background: transparent !important;
 }
-/* 明暗切换按钮 */
-.theme-switch {
-  position: fixed;
-  top: 22px;
-  right: 22px;
-  padding: 9px 18px;
-  border: 1px solid var(--border);
-  background: var(--card-bg);
-  color: var(--text);
-  border-radius: 999px;
-  cursor: pointer;
-  box-shadow: var(--shadow);
-  z-index: 99;
-}
-.theme-switch:hover {
-  transform: translateY(-2px);
-}
-/* 音频弹窗 */
+/* 弹窗样式 */
 .audio-tip-modal {
   position: fixed;
   inset: 0;
@@ -163,11 +148,8 @@ button:hover ~ .mouse-dot {
   transform: translate(-50%, -50%) scale(0);
   width: 50px;
   height: 50px;
-  background: var(--ripple-light);
-  animation: rippleClick 0.8s ease-out forwards;
-}
-.dark-mode .ripple {
   background: var(--ripple-dark);
+  animation: rippleClick 0.8s ease-out forwards;
 }
 @keyframes rippleClick {
   to {
@@ -202,7 +184,7 @@ button:hover ~ .mouse-dot {
 .start-btn-menu:hover {
   scale: 1.05;
 }
-/* 结算弹窗（删除时长、历史最高） */
+/* 结算弹窗 */
 .result-panel {
   position: fixed;
   inset: 0;
@@ -257,7 +239,7 @@ button:hover ~ .mouse-dot {
 .res-btn:hover {
   scale: 1.05;
 }
-/* 游戏UI 文字发光 */
+/* 游戏UI */
 .game-ui-wrap {
   position: fixed;
   top: 30px;
@@ -280,7 +262,7 @@ button:hover ~ .mouse-dot {
   font-weight: 500;
   text-shadow: 0 0 6px var(--text-glow), 0 0 12px var(--text-glow);
 }
-/* 血条顺滑过渡 */
+/* 血条 */
 .hp-container {
   width: 100%;
   height: 14px;
@@ -298,7 +280,7 @@ button:hover ~ .mouse-dot {
   box-shadow: 0 0 4px var(--hp-glow) inset;
   transition: width 0.04s linear;
 }
-/* 目标圆环 + 自身闪烁 */
+/* 判定圈 */
 .target-ring {
   position: absolute;
   border: 3px solid var(--ring-stroke);
@@ -310,6 +292,7 @@ button:hover ~ .mouse-dot {
   border-color: var(--ring-bright);
   box-shadow: 0 0 12px var(--ring-bright), 0 0 24px var(--ring-bright);
 }
+/* 倒计时数字：纯白发光，无底色干扰 */
 .countdown-text {
   position: fixed;
   left: 50%;
@@ -318,7 +301,8 @@ button:hover ~ .mouse-dot {
   font-size: 160px;
   font-weight: bold;
   z-index: 45;
-  text-shadow: 0 0 8px var(--text-glow);
+  color: #ffffff;
+  text-shadow: 0 0 12px rgba(255,255,255,0.9), 0 0 24px rgba(255,255,255,0.6);
 }
 .bottom-tip {
   position: fixed;
@@ -337,9 +321,9 @@ button:hover ~ .mouse-dot {
 </style>
 </head>
 <body>
-<button class="theme-switch" id="themeBtn">切换黑白模式</button>
 <div class="count-flash-mask" id="flashMask"></div>
 <div class="mouse-dot" id="dot"></div>
+<div class="light-mask"></div>
 
 <div class="audio-tip-modal" id="audioTipModal">
   <div class="tip-box">
@@ -354,8 +338,7 @@ button:hover ~ .mouse-dot {
 
 <div class="start-menu" id="menuBox">
   <h1 class="menu-title">稳态平衡挑战</h1>
-  <p class="menu-desc">移动鼠标控制圆点，保持圆点圆心在圆圈内持续回血；<br>默认挑战难度，圆环随机大小，不会随时间缩小</p>
-  <p class="menu-record">历史最高纪录：<span id="menuBest">0.00</span> 秒</p>
+  <p class="menu-desc">通关解锁旮旯给母</p>
   <button class="start-btn-menu" id="enterGameBtn">开始挑战</button>
 </div>
 
@@ -370,7 +353,7 @@ button:hover ~ .mouse-dot {
   </div>
 </div>
 
-<div class="game-ui-wrap" id="gameUI">
+<div class="game-ui-wrap light-visible" id="gameUI">
   <div class="info-row">
     <div>剩余时间：<span id="currentTime">60.00</span>s</div>
     <div>血量：<span id="bestRecord">100</span></div>
@@ -380,12 +363,11 @@ button:hover ~ .mouse-dot {
   </div>
 </div>
 
-<div class="target-ring" id="ring"></div>
-<div class="countdown-text" id="countText"></div>
-<div class="bottom-tip" id="gameTip">待在圈里别动，像西游记那样</div>
+<div class="target-ring light-visible" id="ring"></div>
+<div class="countdown-text light-visible" id="countText"></div>
+<div class="bottom-tip light-visible" id="gameTip">只有鼠标光照区域可见圆环；圈内回血，圈外缓慢扣血</div>
 
 <script>
-// 全局常量
 const CONFIG = {
   DOT_RADIUS: 11,
   RING_MIN_SIZE: 45,
@@ -393,24 +375,22 @@ const CONFIG = {
   MAX_HP: 100,
   MIN_HP: 0,
   HEAL_RATE: 2.2,
-  DRAIN_RATE: 1.4,
-  DRAIN_MUL: 2.0,
+  DRAIN_RATE: 0.8, // 扣血：原版1.4 > 0.8 > 旧慢速0.4
+  DRAIN_MUL: 1.0,
   MAX_OFFSET_FACTOR: 0.9,
   AREA_TOP_OFFSET: 180,
   REFRESH_INTERVAL: 3000,
   HP_TICK_MS: 50,
   TOTAL_GAME_TIME: 60,
-  BLINK_DELAY: 100,
+  BLINK_DELAY: 500, // 0.5秒全屏闪烁解除遮罩
   HP_LERP_SPEED: 0.08,
-  EPS: 0.01 // 浮点误差容差，小于该值视为血量0
+  EPS: 0.01
 };
 
-// 游戏状态
 const state = {
   playing: false,
   countingDown: false,
   lockPointer: false,
-  darkMode: false,
   startTime: 0,
   bestScore: Number(localStorage.getItem("balanceMax")) || 0,
   hp: CONFIG.MAX_HP,
@@ -428,10 +408,9 @@ const state = {
   firstRingSpawn: true
 };
 
-// DOM缓存
 const el = {
   body: document.body,
-  themeBtn: document.getElementById("themeBtn"),
+  lightMask: document.querySelector(".light-mask"),
   flashMask: document.getElementById("flashMask"),
   countText: document.getElementById("countText"),
   dot: document.getElementById("dot"),
@@ -453,25 +432,17 @@ const el = {
   confirmTipBtn: document.getElementById("confirmTipBtn")
 };
 
-// 音频
 let audioInst = null;
 let audioReady = false;
 function initAudio() {
   const audio = new Audio("bgm.mp3");
   audio.loop = true;
   audio.volume = 0.3;
-  audio.addEventListener("canplaythrough", () => {
-    audioReady = true;
-    audioInst = audio;
-  });
-  audio.addEventListener("error", () => {
-    audioReady = false;
-    audioInst = null;
-  });
+  audio.addEventListener("canplaythrough", () => audioReady = true);
+  audio.addEventListener("error", () => audioInst = null);
 }
 initAudio();
 
-// 菜单波纹
 function createRipple(x, y) {
   const ripple = document.createElement("div");
   ripple.className = "ripple";
@@ -482,7 +453,6 @@ function createRipple(x, y) {
 }
 el.menuBox.addEventListener("click", e => createRipple(e.clientX, e.clientY));
 
-// 圆环样式刷新
 function applyRingStyle() {
   el.ring.style.width = state.ringSize + "px";
   el.ring.style.height = state.ringSize + "px";
@@ -492,35 +462,26 @@ function applyRingStyle() {
   el.ring.style.opacity = state.ringOpacity;
 }
 
-// 明暗切换
-el.themeBtn.addEventListener("click", () => {
-  state.darkMode = !state.darkMode;
-  el.body.classList.toggle("dark-mode", state.darkMode);
-});
-
-// 鼠标移动 极简赋值无延迟
 document.addEventListener("mousemove", e => {
   state.mouseX = e.clientX;
   state.mouseY = e.clientY;
-  if (!state.lockPointer) {
-    el.dot.style.left = state.mouseX + "px";
-    el.dot.style.top = state.mouseY + "px";
-  }
+  el.dot.style.left = state.mouseX + "px";
+  el.dot.style.top = state.mouseY + "px";
+  el.body.style.setProperty("--mouse-x", state.mouseX + "px");
+  el.body.style.setProperty("--mouse-y", state.mouseY + "px");
 });
 
-// 触摸 极简赋值
 document.addEventListener("touchmove", e => {
   e.preventDefault();
   const touch = e.touches[0];
   state.mouseX = touch.clientX;
   state.mouseY = touch.clientY;
-  if (!state.lockPointer) {
-    el.dot.style.left = state.mouseX + "px";
-    el.dot.style.top = state.mouseY + "px";
-  }
+  el.dot.style.left = state.mouseX + "px";
+  el.dot.style.top = state.mouseY + "px";
+  el.body.style.setProperty("--mouse-x", state.mouseX + "px");
+  el.body.style.setProperty("--mouse-y", state.mouseY + "px");
 }, { passive: false });
 
-// 碰撞检测
 function isInRing() {
   const dx = state.mouseX - state.ringX;
   const dy = state.mouseY - state.ringY;
@@ -529,7 +490,6 @@ function isInRing() {
   return dist <= r - CONFIG.DOT_RADIUS;
 }
 
-// 刷新圆环位置+0.1秒闪烁
 function refreshRing() {
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -546,8 +506,11 @@ function refreshRing() {
     state.ringY = cy;
     state.firstRingSpawn = false;
   } else {
-    el.ring.classList.add("blink");
-    setTimeout(() => el.ring.classList.remove("blink"), CONFIG.BLINK_DELAY);
+    el.ring.classList.add("blink", "no-mask");
+    setTimeout(() => {
+      el.ring.classList.remove("blink", "no-mask");
+    }, CONFIG.BLINK_DELAY);
+
     const maxOff = w * CONFIG.MAX_OFFSET_FACTOR;
     const ox = (Math.random() * 2 - 1) * maxOff;
     const oy = (Math.random() * 2 - 1) * (h * CONFIG.MAX_OFFSET_FACTOR);
@@ -561,37 +524,27 @@ function refreshRing() {
   applyRingStyle();
 }
 
-// 血量增减：仅区间钳位，无任何结束判定
 function tickHP() {
   if (!state.playing || state.countingDown) return;
-  if (isInRing()) {
-    state.hp += CONFIG.HEAL_RATE;
-  } else {
-    state.hp -= CONFIG.DRAIN_RATE * CONFIG.DRAIN_MUL;
-  }
-  // 严格锁定血量区间0~100
+  if (isInRing()) state.hp += CONFIG.HEAL_RATE;
+  else state.hp -= CONFIG.DRAIN_RATE * CONFIG.DRAIN_MUL;
   state.hp = Math.max(CONFIG.MIN_HP, Math.min(CONFIG.MAX_HP, state.hp));
 }
 
-// 渲染循环：浮点容错判定，血量接近0自动结算
 function gameLoop() {
   if (!state.playing) return;
   const pass = (Date.now() - state.startTime) / 1000;
   state.remainTime = CONFIG.TOTAL_GAME_TIME - pass;
   el.currentTime.textContent = state.remainTime.toFixed(2);
-  // 时间耗尽 → 胜利
   if (state.remainTime <= 0) {
     endGame(true);
     return;
   }
-  // 平滑插值血量
   state.smoothHp += (state.hp - state.smoothHp) * CONFIG.HP_LERP_SPEED;
   state.smoothHp = Math.max(CONFIG.MIN_HP, Math.min(CONFIG.MAX_HP, state.smoothHp));
   const displayHp = Math.floor(state.smoothHp);
-  // 血条宽度与浮点血量完全绑定同步
   el.hpBar.style.width = state.smoothHp + "%";
   el.bestRecord.textContent = displayHp;
-  // 修复浮点精度BUG：血量小于误差容差视为空，触发失败
   if (state.smoothHp < CONFIG.EPS) {
     endGame(false);
     return;
@@ -599,7 +552,6 @@ function gameLoop() {
   state.animFrame = requestAnimationFrame(gameLoop);
 }
 
-// 游戏结束统一处理
 function endGame(isWin) {
   state.playing = false;
   cancelAnimationFrame(state.animFrame);
@@ -621,24 +573,24 @@ function endGame(isWin) {
   el.resultPanel.classList.add("show");
 }
 
-// 321倒计时
+// 倒计时：无全屏背景，只显示发光数字3/2/1
 function startCountdown(cb) {
   state.countingDown = true;
-  state.lockPointer = true;
   let cnt = 3;
   el.flashMask.classList.add("show");
+  el.flashMask.style.background = "transparent";
   const timer = setInterval(() => {
     el.countText.textContent = cnt;
-    el.flashMask.style.background = cnt === 3 || cnt === 1 ? "#fff" : "#000";
-    el.countText.style.color = cnt === 3 || cnt === 1 ? "#000" : "#fff";
+    // 统一白色发光数字，无底色切换
+    el.countText.style.color = "#ffffff";
+    el.countText.style.textShadow = "0 0 12px rgba(255,255,255,0.9), 0 0 24px rgba(255,255,255,0.6)";
     cnt--;
     if (cnt < 0) {
       clearInterval(timer);
       el.countText.textContent = "";
       el.flashMask.classList.remove("show");
-      el.flashMask.style.background = "";
+      el.flashMask.style.background = "transparent";
       state.countingDown = false;
-      state.lockPointer = false;
       el.gameUI.classList.add("visible");
       el.gameTip.classList.add("visible");
       if (audioReady && audioInst) audioInst.play().catch(() => {});
@@ -647,7 +599,6 @@ function startCountdown(cb) {
   }, 1000);
 }
 
-// 重置游戏
 function resetGame() {
   state.hp = CONFIG.MAX_HP;
   state.smoothHp = CONFIG.MAX_HP;
@@ -660,6 +611,8 @@ function resetGame() {
   el.currentTime.textContent = state.remainTime.toFixed(2);
   el.dot.style.left = state.mouseX + "px";
   el.dot.style.top = state.mouseY + "px";
+  el.body.style.setProperty("--mouse-x", state.mouseX + "px");
+  el.body.style.setProperty("--mouse-y", state.mouseY + "px");
   el.resultPanel.classList.remove("show");
   el.gameUI.classList.remove("visible");
   el.gameTip.classList.remove("visible");
@@ -669,7 +622,6 @@ function resetGame() {
   refreshRing();
 }
 
-// 启动游戏
 function launchGame() {
   resetGame();
   startCountdown(() => {
@@ -681,10 +633,7 @@ function launchGame() {
   });
 }
 
-// 按钮绑定
-el.enterGameBtn.addEventListener("click", () => {
-  el.audioTipModal.style.display = "flex";
-});
+el.enterGameBtn.addEventListener("click", () => el.audioTipModal.style.display = "flex");
 el.confirmTipBtn.addEventListener("click", () => {
   el.audioTipModal.style.display = "none";
   el.menuBox.classList.add("hidden");
@@ -700,7 +649,8 @@ el.homeBtn.addEventListener("click", () => {
   el.menuBox.classList.remove("hidden");
 });
 
-// 初始化页面
+el.body.style.setProperty("--mouse-x", state.mouseX + "px");
+el.body.style.setProperty("--mouse-y", state.mouseY + "px");
 el.menuBest.textContent = state.bestScore.toFixed(2);
 el.bestRecord.textContent = Math.floor(state.smoothHp);
 el.currentTime.textContent = state.remainTime.toFixed(2);
