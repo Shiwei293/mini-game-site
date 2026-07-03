@@ -240,20 +240,44 @@ body {
   box-shadow: 0 0 4px var(--hp-glow) inset;
   transition: width 0.04s linear;
 }
-/* 判定圈 */
+/* 炫酷旋转光效判定圈 */
 .target-ring {
   position: fixed;
   width: 60px;
   height: 60px;
-  border: 3px solid var(--ring-stroke);
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  transition: left 0.4s ease, top 0.4s ease, border-color 0.1s ease, box-shadow 0.1s ease;
+  transition: left 0.4s ease, top 0.4s ease, box-shadow 0.1s ease;
   z-index: 1;
+  animation: ringGlowSpin 2.5s linear infinite;
+  border: 3px solid transparent;
+  border-top-color: rgba(255,255,255,0.9);
+  border-right-color: rgba(255,255,255,0.6);
+  border-bottom-color: rgba(255,255,255,0.3);
+  border-left-color: transparent;
+  box-shadow:
+    0 0 8px rgba(255,255,255,0.8),
+    0 0 16px rgba(255,255,255,0.5),
+    0 0 24px rgba(255,255,255,0.3),
+    inset 0 0 12px rgba(255,255,255,0.4);
 }
 .target-ring.blink {
-  border-color: var(--ring-bright);
-  box-shadow: 0 0 12px var(--ring-bright), 0 0 24px var(--ring-bright);
+  border-top-color: #ffffff;
+  border-right-color: #ffffff;
+  border-bottom-color: #ffffff;
+  box-shadow:
+    0 0 12px #ffffff,
+    0 0 24px rgba(255,255,255,0.8),
+    0 0 36px rgba(255,255,255,0.6),
+    inset 0 0 18px rgba(255,255,255,0.5);
+}
+@keyframes ringGlowSpin {
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
 }
 /* 倒计时数字：纯白发光，无底色干扰 */
 .countdown-text {
@@ -335,14 +359,18 @@ const CONFIG = {
   AREA_TOP_OFFSET: 180,
   REFRESH_INTERVAL: 3000,
   HP_TICK_MS: 50,
-  TOTAL_GAME_TIME: 105, // 1分45秒=105秒
+  TOTAL_GAME_TIME: 105,
   BLINK_DELAY: 500,
   HP_LERP_SPEED: 0.08,
   EPS: 0.01,
   GAME_AREA_TOP: 140,
   GAME_AREA_BOTTOM: window.innerHeight - 100,
   GAME_AREA_LEFT: 20,
-  GAME_AREA_RIGHT: window.innerWidth - 20
+  GAME_AREA_RIGHT: window.innerWidth - 20,
+  // 抖动幅度提升至11像素，比之前9更大，无限接近旧版12但顺滑不卡顿
+  SHAKE_STIFFNESS: 0.05,
+  SHAKE_DAMPING: 0.14,
+  MAX_SHAKE_RANGE: 11
 };
 
 const state = {
@@ -358,12 +386,16 @@ const state = {
   mouseY: window.innerHeight / 2,
   ringX: window.innerWidth / 2,
   ringY: window.innerHeight / 2,
-  ringSize: 60,
-  ringOpacity: 1,
+  ringSize:60,
+  ringOpacity:1,
   animFrame: null,
   ringTimer: null,
   hpTimer: null,
-  firstRingSpawn: true
+  firstRingSpawn: true,
+  shakeX: 0,
+  shakeY: 0,
+  shakeVelX: 0,
+  shakeVelY: 0
 };
 
 const el = {
@@ -415,10 +447,6 @@ function applyRingStyle() {
 document.addEventListener("mousemove", e => {
   state.mouseX = e.clientX;
   state.mouseY = e.clientY;
-  el.dot.style.left = state.mouseX + "px";
-  el.dot.style.top = state.mouseY + "px";
-  el.body.style.setProperty("--mouse-x", state.mouseX + "px");
-  el.body.style.setProperty("--mouse-y", state.mouseY + "px");
 });
 
 document.addEventListener("touchmove", e => {
@@ -426,10 +454,6 @@ document.addEventListener("touchmove", e => {
   const touch = e.touches[0];
   state.mouseX = touch.clientX;
   state.mouseY = touch.clientY;
-  el.dot.style.left = state.mouseX + "px";
-  el.dot.style.top = state.mouseY + "px";
-  el.body.style.setProperty("--mouse-x", state.mouseX + "px");
-  el.body.style.setProperty("--mouse-y", state.mouseY + "px");
 }, { passive: false });
 
 function isInRing() {
@@ -475,19 +499,46 @@ function tickHP() {
 
 function gameLoop() {
   if (!state.playing) return;
+  // 帧同步弹簧平滑抖动物理计算（无定时器卡顿）
+  const targetShakeX = (Math.random() - 0.5) * CONFIG.MAX_SHAKE_RANGE;
+  const targetShakeY = (Math.random() - 0.5) * CONFIG.MAX_SHAKE_RANGE;
+  state.shakeVelX += (targetShakeX - state.shakeX) * CONFIG.SHAKE_STIFFNESS;
+  state.shakeVelY += (targetShakeY - state.shakeY) * CONFIG.SHAKE_STIFFNESS;
+  state.shakeVelX *= (1 - CONFIG.SHAKE_DAMPING);
+  state.shakeVelY *= (1 - CONFIG.SHAKE_DAMPING);
+  state.shakeX += state.shakeVelX;
+  state.shakeY += state.shakeVelY;
+  // 限制最大偏移幅度
+  const shakeDist = Math.hypot(state.shakeX, state.shakeY);
+  if (shakeDist > CONFIG.MAX_SHAKE_RANGE) {
+    const scale = CONFIG.MAX_SHAKE_RANGE / shakeDist;
+    state.shakeX *= scale;
+    state.shakeY *= scale;
+    state.shakeVelX *= 0.4;
+    state.shakeVelY *= 0.4;
+  }
+  // 渲染带平滑抖动的鼠标圆点与遮罩
+  const renderX = state.mouseX + state.shakeX;
+  const renderY = state.mouseY + state.shakeY;
+  el.dot.style.left = renderX + "px";
+  el.dot.style.top = renderY + "px";
+  el.body.style.setProperty("--mouse-x", renderX + "px");
+  el.body.style.setProperty("--mouse-y", renderY + "px");
+
+  // 倒计时逻辑
   const pass = (Date.now() - state.startTime) / 1000;
   state.remainTime = CONFIG.TOTAL_GAME_TIME - pass;
   el.currentTime.textContent = state.remainTime.toFixed(2);
-  // 时间到胜利
   if (state.remainTime <= 0) {
     endGame(true);
     return;
   }
+  // 平滑血量更新
   state.smoothHp += (state.hp - state.smoothHp) * CONFIG.HP_LERP_SPEED;
   state.smoothHp = Math.max(CONFIG.MIN_HP, Math.min(CONFIG.MAX_HP, state.smoothHp));
   el.hpBar.style.width = state.smoothHp + "%";
   el.hpNum.textContent = Math.floor(state.smoothHp);
-  // 血量归零失败，强制调用结算
+  // 血量归零触发失败结算
   if (state.smoothHp <= CONFIG.EPS) {
     endGame(false);
     return;
@@ -496,7 +547,6 @@ function gameLoop() {
 }
 
 function endGame(isWin) {
-  // 防止重复触发结算
   if (!state.playing) return;
   state.playing = false;
   cancelAnimationFrame(state.animFrame);
@@ -505,20 +555,13 @@ function endGame(isWin) {
   if (audioInst) audioInst.pause();
   const playTime = CONFIG.TOTAL_GAME_TIME - state.remainTime;
   el.newRecordTip.style.display = "none";
-  // 设置结算标题
-  if(isWin){
-    el.resultTitle.textContent = "挑战成功";
-  }else{
-    el.resultTitle.textContent = "挑战失败";
-  }
-  // 判断是否刷新最高分
+  el.resultTitle.textContent = isWin ? "挑战成功" : "挑战失败";
   if (playTime > state.bestScore) {
     state.bestScore = playTime;
     localStorage.setItem("balanceMax", state.bestScore);
     el.menuBest.textContent = state.bestScore.toFixed(2);
     el.newRecordTip.style.display = "block";
   }
-  // 显示结算弹窗
   el.resultPanel.classList.add("show");
 }
 
@@ -559,6 +602,11 @@ function resetGame() {
   state.firstRingSpawn = true;
   state.mouseX = window.innerWidth / 2;
   state.mouseY = window.innerHeight / 2;
+  // 重置抖动物理状态，消除残留晃动
+  state.shakeX = 0;
+  state.shakeY = 0;
+  state.shakeVelX = 0;
+  state.shakeVelY = 0;
   el.hpBar.style.width = state.smoothHp + "%";
   el.hpNum.textContent = Math.floor(state.smoothHp);
   el.currentTime.textContent = state.remainTime.toFixed(2);
