@@ -2,20 +2,23 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>全屏稳态平衡挑战</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>367の小游戏</title>
 <style>
 :root {
   --bg: #f7f7f7;
   --card-bg: #ffffff;
-  --text: #111111;
-  --border: #dddddd;
+  --text: #111;
+  --text-glow: rgba(255,255,255,0.95);
+  --border: #ddd;
   --ring-stroke: #000;
-  --player-dot: #000;
+  --ring-bright: #fff;
+  --dot-color: #000;
   --hp-empty: #ddd;
   --hp-full: #111;
+  --hp-glow: rgba(255,255,255,0.85);
   --shadow: 0 10px 32px rgba(0,0,0,0.08);
-  --global-transition: all 0.32s cubic-bezier(0.22, 0, 0.2, 1);
+  --trans: all 0.32s cubic-bezier(0.22, 0, 0.2, 1);
   --ripple-light: rgba(0,0,0,0.1);
   --ripple-dark: rgba(255,255,255,0.14);
 }
@@ -23,11 +26,14 @@
   --bg: #0c0c0c;
   --card-bg: #171717;
   --text: #f1f1f1;
-  --border: #333333;
+  --text-glow: rgba(0,0,0,0.75);
+  --border: #333;
   --ring-stroke: #fff;
-  --player-dot: #fff;
+  --ring-bright: #fff;
+  --dot-color: #fff;
   --hp-empty: #333;
   --hp-full: #fff;
+  --hp-glow: rgba(0,0,0,0.6);
   --shadow: 0 10px 32px rgba(0,0,0,0.35);
 }
 * {
@@ -35,7 +41,7 @@
   padding: 0;
   box-sizing: border-box;
   font-family: system-ui, -apple-system;
-  transition: var(--global-transition);
+  transition: var(--trans);
 }
 body {
   background: var(--bg);
@@ -45,36 +51,35 @@ body {
   position: relative;
   cursor: none;
 }
-/* 自定义圆点鼠标 */
+/* 鼠标圆点无延迟 */
 .mouse-dot {
-  position: absolute;
+  position: fixed;
   width: 22px;
   height: 22px;
-  background: var(--player-dot);
+  background: var(--dot-color);
   border-radius: 50%;
   transform: translate(-50%, -50%);
   pointer-events: none;
-  transition: background 0.2s ease;
   z-index: 9999;
-  opacity: 1;
+  transition: none;
+  will-change: left, top;
 }
 button:hover ~ .mouse-dot {
   background: var(--bg);
 }
-/* 倒计时黑白遮罩 */
+/* 倒计时黑白闪屏 */
 .count-flash-mask {
   position: fixed;
   inset: 0;
   z-index: 40;
   pointer-events: none;
   opacity: 0;
-  transition: background 0.4s ease, opacity 0.3s ease;
 }
 .count-flash-mask.show {
   opacity: 1;
   pointer-events: all;
 }
-/* 切换明暗按钮 */
+/* 明暗切换按钮 */
 .theme-switch {
   position: fixed;
   top: 22px;
@@ -91,8 +96,7 @@ button:hover ~ .mouse-dot {
 .theme-switch:hover {
   transform: translateY(-2px);
 }
-
-/* 音频提示弹窗样式 */
+/* 音频弹窗 */
 .audio-tip-modal {
   position: fixed;
   inset: 0;
@@ -134,8 +138,7 @@ button:hover ~ .mouse-dot {
 .confirm-tip-btn:hover {
   scale: 1.05;
 }
-
-/* 开始菜单 */
+/* 主菜单 */
 .start-menu {
   position: fixed;
   inset: 0;
@@ -199,8 +202,7 @@ button:hover ~ .mouse-dot {
 .start-btn-menu:hover {
   scale: 1.05;
 }
-
-/* 结算弹窗 */
+/* 结算弹窗（删除时长、最高分文字） */
 .result-panel {
   position: fixed;
   inset: 0;
@@ -230,10 +232,6 @@ button:hover ~ .mouse-dot {
   font-size: 40px;
   font-weight: 600;
 }
-.result-data {
-  font-size: 24px;
-  line-height: 2;
-}
 .result-buttons {
   display: flex;
   gap: 20px;
@@ -259,8 +257,7 @@ button:hover ~ .mouse-dot {
 .res-btn:hover {
   scale: 1.05;
 }
-
-/* 游戏顶部UI */
+/* 游戏UI 文字发光 */
 .game-ui-wrap {
   position: fixed;
   top: 30px;
@@ -281,7 +278,9 @@ button:hover ~ .mouse-dot {
   margin-bottom: 16px;
   font-size: 36px;
   font-weight: 500;
+  text-shadow: 0 0 6px var(--text-glow), 0 0 12px var(--text-glow);
 }
+/* 血条容器 */
 .hp-container {
   width: 100%;
   height: 14px;
@@ -289,22 +288,27 @@ button:hover ~ .mouse-dot {
   background: var(--hp-empty);
   overflow: hidden;
   margin-bottom: 20px;
+  box-shadow: 0 0 5px var(--hp-glow), 0 0 10px var(--hp-glow);
 }
 .hp-fill {
   height: 100%;
-  width: 100%;
+  /* 移除过渡，实现数字与血条1:1同步无延迟 */
+  transition: none;
   background: var(--hp-full);
   border-radius: 999px;
-  transition: width 0.15s ease;
+  box-shadow: 0 0 4px var(--hp-glow) inset;
 }
-
-/* 游戏圆环目标 */
+/* 目标圆环 + 自身闪烁 */
 .target-ring {
   position: absolute;
   border: 3px solid var(--ring-stroke);
   border-radius: 50%;
-  transition: left 0.4s ease, top 0.4s ease, width 0.4s ease, height 0.4s ease, opacity 0.4s ease;
+  transition: left 0.4s ease, top 0.4s ease, width 0.4s ease, height 0.4s ease, border-color 0.12s ease, box-shadow 0.12s ease;
   z-index: 1;
+}
+.target-ring.blink {
+  border-color: var(--ring-bright);
+  box-shadow: 0 0 12px var(--ring-bright), 0 0 24px var(--ring-bright);
 }
 .countdown-text {
   position: fixed;
@@ -314,6 +318,7 @@ button:hover ~ .mouse-dot {
   font-size: 160px;
   font-weight: bold;
   z-index: 45;
+  text-shadow: 0 0 8px var(--text-glow);
 }
 .bottom-tip {
   position: fixed;
@@ -336,7 +341,6 @@ button:hover ~ .mouse-dot {
 <div class="count-flash-mask" id="flashMask"></div>
 <div class="mouse-dot" id="dot"></div>
 
-<!-- 音频提示弹窗 -->
 <div class="audio-tip-modal" id="audioTipModal">
   <div class="tip-box">
     <div class="tip-title">音频提示</div>
@@ -348,7 +352,6 @@ button:hover ~ .mouse-dot {
   </div>
 </div>
 
-<!-- 主菜单 -->
 <div class="start-menu" id="menuBox">
   <h1 class="menu-title">稳态平衡挑战</h1>
   <p class="menu-desc">移动鼠标控制圆点，保持圆点圆心在圆圈内持续回血；<br>默认挑战难度，圆环随机大小，不会随时间缩小</p>
@@ -356,14 +359,11 @@ button:hover ~ .mouse-dot {
   <button class="start-btn-menu" id="enterGameBtn">开始挑战</button>
 </div>
 
+<!-- 结算面板：移除本局时长、历史最高DOM -->
 <div class="result-panel" id="resultPanel">
   <div class="result-box">
-    <h2 class="result-title">挑战结束</h2>
-    <div class="result-data">
-      <p>本局时长：<span id="finalTime">0.00</span> s</p>
-      <p>历史最高：<span id="finalBest">0.00</span> s</p>
-      <p id="newRecordTip" style="color:#22c55e;display:none;">🎉 刷新最高纪录！</p>
-    </div>
+    <h2 class="result-title" id="resultTitle">挑战结束</h2>
+    <p id="newRecordTip" style="color:#22c55e;display:none;">🎉 刷新最高纪录！</p>
     <div class="result-buttons">
       <button class="res-btn retry-btn" id="retryBtn">再来一局</button>
       <button class="res-btn home-btn" id="homeBtn">返回主页</button>
@@ -373,8 +373,8 @@ button:hover ~ .mouse-dot {
 
 <div class="game-ui-wrap" id="gameUI">
   <div class="info-row">
-    <div>当前时长：<span id="currentTime">0.00</span>s</div>
-    <div>最高纪录：<span id="bestRecord">0.00</span>s</div>
+    <div>剩余时间：<span id="currentTime">60.00</span>s</div>
+    <div>血量：<span id="bestRecord">100</span></div>
   </div>
   <div class="hp-container">
     <div class="hp-fill" id="hpBar"></div>
@@ -386,304 +386,317 @@ button:hover ~ .mouse-dot {
 <div class="bottom-tip" id="gameTip">圈内回血速度更快，圈外掉血；圆环随机尺寸，不会随时间缩小</div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-// 全局元素获取
-const body = document.body;
-const themeBtn = document.getElementById("themeBtn");
-const flashMask = document.getElementById("flashMask");
-const countText = document.getElementById("countText");
-const dot = document.getElementById("dot");
-const menuBox = document.getElementById("menuBox");
-const enterGameBtn = document.getElementById("enterGameBtn");
-const menuBest = document.getElementById("menuBest");
-const resultPanel = document.getElementById("resultPanel");
-const finalTime = document.getElementById("finalTime");
-const finalBest = document.getElementById("finalBest");
-const newRecordTip = document.getElementById("newRecordTip");
-const retryBtn = document.getElementById("retryBtn");
-const homeBtn = document.getElementById("homeBtn");
-const gameUI = document.getElementById("gameUI");
-const gameTip = document.getElementById("gameTip");
-const ring = document.getElementById("ring");
-const hpBar = document.getElementById("hpBar");
-const currentTime = document.getElementById("currentTime");
-const bestRecord = document.getElementById("bestRecord");
-// 音频弹窗
-const audioTipModal = document.getElementById("audioTipModal");
-const confirmTipBtn = document.getElementById("confirmTipBtn");
+// 全局常量
+const CONFIG = {
+  DOT_RADIUS: 11,
+  RING_MIN_SIZE: 45,
+  RING_MAX_SIZE: 80,
+  MAX_HP: 100,
+  HEAL_RATE: 2.2,
+  DRAIN_RATE: 1.4,
+  DRAIN_MUL: 2.0,
+  MAX_OFFSET_FACTOR: 0.9,
+  AREA_TOP_OFFSET: 180,
+  REFRESH_INTERVAL: 3000,
+  HP_TICK_MS: 50,
+  TOTAL_GAME_TIME: 60,
+  BLINK_DELAY: 120
+};
 
-// 游戏背景音乐
-let bgmAudio = null;
-let audioAvailable = false;
+// 游戏状态
+const state = {
+  playing: false,
+  countingDown: false,
+  lockPointer: false,
+  darkMode: false,
+  startTime: 0,
+  bestScore: Number(localStorage.getItem("balanceMax")) || 0,
+  hp: CONFIG.MAX_HP,
+  remainTime: CONFIG.TOTAL_GAME_TIME,
+  mouseX: window.innerWidth / 2,
+  mouseY: window.innerHeight / 2,
+  ringX: window.innerWidth / 2,
+  ringY: window.innerHeight / 2,
+  ringSize: 60,
+  ringOpacity: 1,
+  animFrame: null,
+  ringTimer: null,
+  hpTimer: null,
+  firstRingSpawn: true
+};
+
+// DOM缓存
+const el = {
+  body: document.body,
+  themeBtn: document.getElementById("themeBtn"),
+  flashMask: document.getElementById("flashMask"),
+  countText: document.getElementById("countText"),
+  dot: document.getElementById("dot"),
+  menuBox: document.getElementById("menuBox"),
+  enterGameBtn: document.getElementById("enterGameBtn"),
+  menuBest: document.getElementById("menuBest"),
+  resultPanel: document.getElementById("resultPanel"),
+  newRecordTip: document.getElementById("newRecordTip"),
+  retryBtn: document.getElementById("retryBtn"),
+  homeBtn: document.getElementById("homeBtn"),
+  gameUI: document.getElementById("gameUI"),
+  gameTip: document.getElementById("gameTip"),
+  ring: document.getElementById("ring"),
+  hpBar: document.getElementById("hpBar"),
+  currentTime: document.getElementById("currentTime"),
+  bestRecord: document.getElementById("bestRecord"),
+  resultTitle: document.getElementById("resultTitle"),
+  audioTipModal: document.getElementById("audioTipModal"),
+  confirmTipBtn: document.getElementById("confirmTipBtn")
+};
+
+// 音频
+let audioInst = null;
+let audioReady = false;
 function initAudio() {
   const audio = new Audio("bgm.mp3");
   audio.loop = true;
-  audio.preload = "auto";
   audio.volume = 0.3;
   audio.addEventListener("canplaythrough", () => {
-    audioAvailable = true;
-    bgmAudio = audio;
-    console.log("bgm.mp3 加载完成");
+    audioReady = true;
+    audioInst = audio;
   });
   audio.addEventListener("error", () => {
-    audioAvailable = false;
-    bgmAudio = null;
-    console.log("未找到bgm.mp3，无背景音乐");
+    audioReady = false;
+    audioInst = null;
   });
 }
 initAudio();
 
 // 菜单波纹
 function createRipple(x, y) {
-  if(menuBox.classList.contains('hidden')) return;
-  const ripple = document.createElement('div');
-  ripple.className = 'ripple';
-  ripple.style.left = x + 'px';
-  ripple.style.top = y + 'px';
-  menuBox.appendChild(ripple);
-  setTimeout(()=>ripple.remove(), 800);
+  const ripple = document.createElement("div");
+  ripple.className = "ripple";
+  ripple.style.left = x + "px";
+  ripple.style.top = y + "px";
+  el.menuBox.appendChild(ripple);
+  setTimeout(() => ripple.remove(), 800);
 }
-menuBox.addEventListener('click', e=>createRipple(e.clientX, e.clientY));
+el.menuBox.addEventListener("click", e => createRipple(e.clientX, e.clientY));
 
-// 挑战难度常量
-const DOT_RADIUS = 11;
-const RING_MIN_SIZE = 45;
-const RING_MAX_SIZE = 80;
-const MAX_HP = 100;
-const BASE_HEAL = 2.2;
-const BASE_DRAIN = 1.4;
-const maxDistanceFactor = 0.9;
-const damageMul = 2.0;
-const realHeal = BASE_HEAL;
-const realDrain = BASE_DRAIN * damageMul;
-const AREA_TOP_Y = 180;
-const AREA_BOTTOM_Y = window.innerHeight - 100;
-const REFRESH_INTERVAL = 3000;
-const HP_TICK_RATE = 50;
-
-// 游戏状态
-let isPlaying = false;
-let isCountingDown = false;
-let lockDotMove = false;
-let isDarkTheme = false;
-let startTime = 0;
-let bestScore = Number(localStorage.getItem("balanceMax")) || 0;
-let hp = MAX_HP;
-let mouseX = window.innerWidth / 2;
-let mouseY = window.innerHeight / 2;
-let ringX = window.innerWidth / 2;
-let ringY = window.innerHeight / 2;
-let ringSize = 60;
-let ringOpacity = 1;
-let frameId = null;
-let ringTimer = null;
-let hpTimer = null;
-// 新增：标记是否是开局第一次刷新圆环
-let firstRingSpawn = true;
-
-menuBest.textContent = bestScore.toFixed(2);
-bestRecord.textContent = bestScore.toFixed(2);
-hpBar.style.width = hp + "%";
-
-function resetRingStyle() {
-  ring.style.width = ringSize + "px";
-  ring.style.height = ringSize + "px";
-  ring.style.left = ringX + "px";
-  ring.style.top = ringY + "px";
-  ring.style.transform = "translate(-50%, -50%)";
-  ring.style.opacity = ringOpacity;
+// 圆环样式刷新
+function applyRingStyle() {
+  el.ring.style.width = state.ringSize + "px";
+  el.ring.style.height = state.ringSize + "px";
+  el.ring.style.left = state.ringX + "px";
+  el.ring.style.top = state.ringY + "px";
+  el.ring.style.transform = "translate(-50%, -50%)";
+  el.ring.style.opacity = state.ringOpacity;
 }
 
-themeBtn.addEventListener('click', () => {
-  body.classList.toggle("dark-mode");
-  isDarkTheme = body.classList.contains("dark-mode");
+// 明暗切换
+el.themeBtn.addEventListener("click", () => {
+  state.darkMode = !state.darkMode;
+  el.body.classList.toggle("dark-mode", state.darkMode);
 });
 
+// 鼠标移动 极简赋值无延迟
 document.addEventListener("mousemove", e => {
-  mouseX = e.clientX;
-  mouseY = e.clientY;
-  if (!lockDotMove) {
-    dot.style.left = mouseX + "px";
-    dot.style.top = mouseY + "px";
+  state.mouseX = e.clientX;
+  state.mouseY = e.clientY;
+  if (!state.lockPointer) {
+    el.dot.style.left = state.mouseX + "px";
+    el.dot.style.top = state.mouseY + "px";
   }
 });
 
-// 圆环判定
-function isInsideCircle() {
-  const dx = mouseX - ringX;
-  const dy = mouseY - ringY;
+// 触摸适配
+document.addEventListener("touchmove", e => {
+  e.preventDefault();
+  const touch = e.touches[0];
+  state.mouseX = touch.clientX;
+  state.mouseY = touch.clientY;
+  if (!state.lockPointer) {
+    el.dot.style.left = state.mouseX + "px";
+    el.dot.style.top = state.mouseY + "px";
+  }
+}, { passive: false });
+
+// 碰撞检测
+function isInRing() {
+  const dx = state.mouseX - state.ringX;
+  const dy = state.mouseY - state.ringY;
   const dist = Math.sqrt(dx * dx + dy * dy);
-  const ringRadius = ringSize / 2;
-  const safeRange = ringRadius - DOT_RADIUS;
-  return dist <= safeRange;
+  const r = state.ringSize / 2;
+  return dist <= r - CONFIG.DOT_RADIUS;
 }
 
-// 随机圆环：开局强制居中，之后随机
-function randomUpdateRing() {
+// 刷新圆环+闪烁
+function refreshRing() {
   const w = window.innerWidth;
   const h = window.innerHeight;
-  const centerX = w / 2;
-  const centerY = h / 2;
-  const halfR = ringSize / 2;
-  const minY = AREA_TOP_Y + halfR;
-  const maxY = AREA_BOTTOM_Y - halfR;
+  const cx = w / 2;
+  const cy = h / 2;
+  const halfR = state.ringSize / 2;
+  const minY = CONFIG.AREA_TOP_OFFSET + halfR;
+  const maxY = h - halfR;
 
-  ringSize = RING_MIN_SIZE + Math.random() * (RING_MAX_SIZE - RING_MIN_SIZE);
+  state.ringSize = CONFIG.RING_MIN_SIZE + Math.random() * (CONFIG.RING_MAX_SIZE - CONFIG.RING_MIN_SIZE);
 
-  if (firstRingSpawn) {
-    // 第一次生成：固定屏幕中心
-    ringX = centerX;
-    ringY = centerY;
-    firstRingSpawn = false;
+  if (state.firstRingSpawn) {
+    state.ringX = cx;
+    state.ringY = cy;
+    state.firstRingSpawn = false;
   } else {
-    // 后续刷新：随机位置
-    const maxOffsetX = w * maxDistanceFactor;
-    const maxOffsetY = (maxY - minY) * maxDistanceFactor;
-    const offsetX = (Math.random() * 2 - 1) * maxOffsetX;
-    const offsetY = (Math.random() * 2 - 1) * maxOffsetY;
-
-    let targetX = centerX + offsetX;
-    let targetY = centerY + offsetY;
-
-    targetX = Math.max(halfR, Math.min(w - halfR, targetX));
-    targetY = Math.max(minY, Math.min(maxY, targetY));
-
-    ringX = targetX;
-    ringY = targetY;
+    el.ring.classList.add("blink");
+    setTimeout(() => el.ring.classList.remove("blink"), CONFIG.BLINK_DELAY);
+    const maxOff = w * CONFIG.MAX_OFFSET_FACTOR;
+    const ox = (Math.random() * 2 - 1) * maxOff;
+    const oy = (Math.random() * 2 - 1) * (h * CONFIG.MAX_OFFSET_FACTOR);
+    let tx = cx + ox;
+    let ty = cy + oy;
+    tx = Math.max(halfR, Math.min(w - halfR, tx));
+    ty = Math.max(minY, Math.min(maxY, ty));
+    state.ringX = tx;
+    state.ringY = ty;
   }
-  resetRingStyle();
+  applyRingStyle();
 }
 
-function updateHP() {
-  if (!isPlaying || isCountingDown) return;
-  if (isInsideCircle()) {
-    hp += realHeal;
-    hp = Math.min(hp, MAX_HP);
+// 血量同步更新（血条与数字1:1同步，移除过渡）
+function tickHP() {
+  if (!state.playing || state.countingDown) return;
+  if (isInRing()) {
+    state.hp += CONFIG.HEAL_RATE;
+    state.hp = Math.min(state.hp, CONFIG.MAX_HP);
   } else {
-    hp -= realDrain;
-    if (hp <= 0) gameOver();
+    state.hp -= CONFIG.DRAIN_RATE * CONFIG.DRAIN_MUL;
+    if (state.hp <= 0) {
+      state.hp = 0;
+      endGame(false);
+      return;
+    }
   }
-  hpBar.style.width = hp + "%";
+  // 血条宽度 = 血量百分比，完全同步数字
+  el.hpBar.style.width = state.hp + "%";
+  el.bestRecord.textContent = Math.floor(state.hp);
 }
 
-function gameOver() {
-  isPlaying = false;
-  cancelAnimationFrame(frameId);
-  clearInterval(ringTimer);
-  clearInterval(hpTimer);
-  if(audioAvailable && bgmAudio){
-    bgmAudio.pause();
-    bgmAudio.currentTime = 0;
+// 游戏结束（删除时长、最高分DOM赋值）
+function endGame(isWin) {
+  state.playing = false;
+  cancelAnimationFrame(state.animFrame);
+  clearInterval(state.ringTimer);
+  clearInterval(state.hpTimer);
+  if (audioReady && audioInst) {
+    audioInst.pause();
+    audioInst.currentTime = 0;
   }
-  const totalSec = (Date.now() - startTime) / 1000;
-  currentTime.textContent = totalSec.toFixed(2);
-  finalBest.textContent = bestScore.toFixed(2);
-  newRecordTip.style.display = "none";
-  if (totalSec > bestScore) {
-    bestScore = totalSec;
-    bestRecord.textContent = bestScore.toFixed(2);
-    menuBest.textContent = bestScore.toFixed(2);
-    finalBest.textContent = bestScore.toFixed(2);
-    newRecordTip.style.display = "block";
-    localStorage.setItem("balanceMax", bestScore);
+  const playTime = CONFIG.TOTAL_GAME_TIME - state.remainTime;
+  el.newRecordTip.style.display = "none";
+  el.resultTitle.textContent = isWin ? "挑战成功" : "挑战失败";
+  if (playTime > state.bestScore) {
+    state.bestScore = playTime;
+    localStorage.setItem("balanceMax", state.bestScore);
+    el.menuBest.textContent = state.bestScore.toFixed(2);
+    el.newRecordTip.style.display = "block";
   }
-  resultPanel.classList.add("show");
+  el.resultPanel.classList.add("show");
 }
 
+// 渲染循环
 function gameLoop() {
-  if (!isPlaying) return;
-  const now = Date.now();
-  const totalSec = (now - startTime) / 1000;
-  currentTime.textContent = totalSec.toFixed(2);
-  frameId = requestAnimationFrame(gameLoop);
+  if (!state.playing) return;
+  const pass = (Date.now() - state.startTime) / 1000;
+  state.remainTime = CONFIG.TOTAL_GAME_TIME - pass;
+  el.currentTime.textContent = state.remainTime.toFixed(2);
+  if (state.remainTime <= 0) {
+    state.remainTime = 0;
+    el.currentTime.textContent = "0.00";
+    endGame(true);
+    return;
+  }
+  state.animFrame = requestAnimationFrame(gameLoop);
 }
 
 // 321倒计时
-function startCountDown(callback) {
-  isCountingDown = true;
-  lockDotMove = true;
-  let count = 3;
-  flashMask.classList.add("show");
-  const countInterval = setInterval(() => {
-    countText.textContent = count;
-    flashMask.style.background = count === 3 || count === 1 ? "#fff" : "#000";
-    countText.style.color = count === 3 || count === 1 ? "#000" : "#fff";
-    count--;
-    if (count < 0) {
-      clearInterval(countInterval);
-      countText.textContent = "";
-      flashMask.classList.remove("show");
-      flashMask.style.background = "";
-      isCountingDown = false;
-      lockDotMove = false;
-      gameUI.classList.add("visible");
-      gameTip.classList.add("visible");
-      // 倒计时结束播放音乐
-      if(audioAvailable && bgmAudio){
-        bgmAudio.play().catch(err=>console.log("音频拦截：",err));
-      }
-      callback();
+function startCountdown(cb) {
+  state.countingDown = true;
+  state.lockPointer = true;
+  let cnt = 3;
+  el.flashMask.classList.add("show");
+  const timer = setInterval(() => {
+    el.countText.textContent = cnt;
+    el.flashMask.style.background = cnt === 3 || cnt === 1 ? "#fff" : "#000";
+    el.countText.style.color = cnt === 3 || cnt === 1 ? "#000" : "#fff";
+    cnt--;
+    if (cnt < 0) {
+      clearInterval(timer);
+      el.countText.textContent = "";
+      el.flashMask.classList.remove("show");
+      el.flashMask.style.background = "";
+      state.countingDown = false;
+      state.lockPointer = false;
+      el.gameUI.classList.add("visible");
+      el.gameTip.classList.add("visible");
+      if (audioReady && audioInst) audioInst.play().catch(() => {});
+      cb();
     }
   }, 1000);
 }
 
-// 重置游戏数据
-function resetGameData() {
-  hp = MAX_HP;
-  hpBar.style.width = hp + "%";
-  firstRingSpawn = true; // 重置开局标记，下一局再次居中
-  randomUpdateRing();
-  mouseX = ringX;
-  mouseY = ringY;
-  dot.style.left = mouseX + "px";
-  dot.style.top = mouseY + "px";
-  currentTime.textContent = "0.00";
-  resultPanel.classList.remove("show");
-  gameUI.classList.remove("visible");
-  gameTip.classList.remove("visible");
-  clearInterval(ringTimer);
-  clearInterval(hpTimer);
-  cancelAnimationFrame(frameId);
+// 重置游戏
+function resetGame() {
+  state.hp = CONFIG.MAX_HP;
+  state.remainTime = CONFIG.TOTAL_GAME_TIME;
+  state.firstRingSpawn = true;
+  state.mouseX = state.ringX;
+  state.mouseY = state.ringY;
+  el.hpBar.style.width = state.hp + "%";
+  el.bestRecord.textContent = state.hp;
+  el.currentTime.textContent = state.remainTime.toFixed(2);
+  el.dot.style.left = state.mouseX + "px";
+  el.dot.style.top = state.mouseY + "px";
+  el.resultPanel.classList.remove("show");
+  el.gameUI.classList.remove("visible");
+  el.gameTip.classList.remove("visible");
+  clearInterval(state.ringTimer);
+  clearInterval(state.hpTimer);
+  cancelAnimationFrame(state.animFrame);
+  refreshRing();
 }
 
+// 启动游戏
 function launchGame() {
-  resetGameData();
-  startCountDown(() => {
-    isPlaying = true;
-    startTime = Date.now();
-    ringTimer = setInterval(randomUpdateRing, REFRESH_INTERVAL);
-    hpTimer = setInterval(updateHP, HP_TICK_RATE);
+  resetGame();
+  startCountdown(() => {
+    state.playing = true;
+    state.startTime = Date.now();
+    state.ringTimer = setInterval(refreshRing, CONFIG.REFRESH_INTERVAL);
+    state.hpTimer = setInterval(tickHP, CONFIG.HP_TICK_MS);
     gameLoop();
   });
 }
 
-// 点击开始挑战 → 弹出提示弹窗
-enterGameBtn.addEventListener('click', () => {
-  audioTipModal.style.display = "flex";
+// 按钮绑定
+el.enterGameBtn.addEventListener("click", () => {
+  el.audioTipModal.style.display = "flex";
 });
-
-// 确认弹窗：隐藏菜单+启动游戏
-confirmTipBtn.addEventListener('click', () => {
-  audioTipModal.style.display = "none";
-  menuBox.classList.add("hidden");
+el.confirmTipBtn.addEventListener("click", () => {
+  el.audioTipModal.style.display = "none";
+  el.menuBox.classList.add("hidden");
   launchGame();
 });
-
-// 再来一局（无需弹窗，直接游戏）
-retryBtn.addEventListener('click', launchGame);
-
-// 返回主页：恢复菜单显示、暂停音乐
-homeBtn.addEventListener('click', () => {
-  resetGameData();
-  if(audioAvailable && bgmAudio){
-    bgmAudio.pause();
-    bgmAudio.currentTime = 0;
+el.retryBtn.addEventListener("click", launchGame);
+el.homeBtn.addEventListener("click", () => {
+  resetGame();
+  if (audioReady && audioInst) {
+    audioInst.pause();
+    audioInst.currentTime = 0;
   }
-  gameUI.classList.remove("visible");
-  gameTip.classList.remove("visible");
-  menuBox.classList.remove("hidden");
+  el.menuBox.classList.remove("hidden");
 });
-});
+
+// 初始化页面
+el.menuBest.textContent = state.bestScore.toFixed(2);
+el.bestRecord.textContent = state.hp;
+el.currentTime.textContent = state.remainTime.toFixed(2);
+applyRingStyle();
 </script>
 </body>
 </html>
