@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>全屏稳态平衡挑战</title>
+<style>
+:root {
+  --bg: #f7f7f7;
+  --card-bg: #ffffff;
+  --text: #111111;
+  --border: #dddddd;
+  --ring-stroke: #000;
+  --player-dot: #000;
+  --hp-empty: #ddd;
+  --hp-full: #111;
+  --shadow: 0 10px 32px rgba(0,0,0,0.08);
+  --global-transition: all 0.32s cubic-bezier(0.22, 0, 0.2, 1);
+  --ripple-light: rgba(0,0,0,0.1);
+  --ripple-dark: rgba(255,255,255,0.14);
+}
+.dark-mode {
+  --bg: #0c0c0c;
+  --card-bg: #171717;
+  --text: #f1f1f1;
+  --border: #333333;
+  --ring-stroke: #fff;
+  --player-dot: #fff;
+  --hp-empty: #333;
+  --hp-full: #fff;
+  --shadow: 0 10px 32px rgba(0,0,0,0.35);
+}
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: system-ui, -apple-system;
+  transition: var(--global-transition);
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow: hidden;
+  position: relative;
+  cursor: none;
+}
+/* 自定义圆点鼠标 */
+.mouse-dot {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  background: var(--player-dot);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: background 0.2s ease;
+  z-index: 9999;
+  opacity: 1;
+}
+button:hover ~ .mouse-dot {
+  background: var(--bg);
+}
+/* 倒计时黑白遮罩 */
+.count-flash-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0;
+  transition: background 0.4s ease, opacity 0.3s ease;
+}
+.count-flash-mask.show {
+  opacity: 1;
+  pointer-events: all;
+}
+/* 切换明暗按钮 */
+.theme-switch {
+  position: fixed;
+  top: 22px;
+  right: 22px;
+  padding: 9px 18px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  z-index: 99;
+}
+.theme-switch:hover {
+  transform: translateY(-2px);
+}
+
+/* 音频提示弹窗样式 */
+.audio-tip-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+.tip-box {
+  background: var(--card-bg);
+  padding: 40px 50px;
+  border-radius: 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 480px;
+}
+.tip-title {
+  font-size: 28px;
+  font-weight: bold;
+}
+.tip-text {
+  font-size: 18px;
+  line-height: 1.6;
+  opacity: 0.8;
+}
+.confirm-tip-btn {
+  padding: 14px 40px;
+  font-size: 20px;
+  border-radius: 999px;
+  border: none;
+  background: var(--text);
+  color: var(--bg);
+  cursor: pointer;
+  margin: 0 auto;
+}
+.confirm-tip-btn:hover {
+  scale: 1.05;
+}
+
+/* 开始菜单 */
+.start-menu {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  z-index: 50;
+  overflow: hidden;
+}
+.start-menu.hidden {
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+}
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0);
+  width: 50px;
+  height: 50px;
+  background: var(--ripple-light);
+  animation: rippleClick 0.8s ease-out forwards;
+}
+.dark-mode .ripple {
+  background: var(--ripple-dark);
+}
+@keyframes rippleClick {
+  to {
+    transform: translate(-50%, -50%) scale(14);
+    opacity: 0;
+  }
+}
+.menu-title {
+  font-size: 48px;
+  font-weight: 600;
+}
+.menu-desc {
+  font-size: 20px;
+  opacity: 0.6;
+  text-align: center;
+  max-width: 600px;
+  line-height: 1.8;
+}
+.menu-record {
+  font-size: 24px;
+}
+.start-btn-menu {
+  padding: 18px 56px;
+  font-size: 26px;
+  border-radius: 999px;
+  border: none;
+  background: var(--text);
+  color: var(--bg);
+  cursor: pointer;
+  margin-top: 16px;
+}
+.start-btn-menu:hover {
+  scale: 1.05;
+}
+
+/* 结算弹窗 */
+.result-panel {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  opacity: 0;
+  pointer-events: none;
+}
+.result-panel.show {
+  opacity: 1;
+  pointer-events: all;
+}
+.result-box {
+  background: var(--card-bg);
+  padding: 48px 64px;
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.result-title {
+  font-size: 40px;
+  font-weight: 600;
+}
+.result-data {
+  font-size: 24px;
+  line-height: 2;
+}
+.result-buttons {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  margin-top: 10px;
+}
+.res-btn {
+  padding: 14px 36px;
+  font-size: 20px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+}
+.retry-btn {
+  background: var(--text);
+  color: var(--bg);
+}
+.home-btn {
+  background: transparent;
+  border: 2px solid var(--text);
+  color: var(--text);
+}
+.res-btn:hover {
+  scale: 1.05;
+}
+
+/* 游戏顶部UI */
+.game-ui-wrap {
+  position: fixed;
+  top: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 600px;
+  z-index: 10;
+  opacity: 0;
+  pointer-events: none;
+}
+.game-ui-wrap.visible {
+  opacity: 1;
+  pointer-events: all;
+}
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  font-size: 36px;
+  font-weight: 500;
+}
+.hp-container {
+  width: 100%;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--hp-empty);
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+.hp-fill {
+  height: 100%;
+  width: 100%;
+  background: var(--hp-full);
+  border-radius: 999px;
+  transition: width 0.15s ease;
+}
+
+/* 游戏圆环目标 */
+.target-ring {
+  position: absolute;
+  border: 3px solid var(--ring-stroke);
+  border-radius: 50%;
+  transition: left 0.4s ease, top 0.4s ease, width 0.4s ease, height 0.4s ease, opacity 0.4s ease;
+  z-index: 1;
+}
+.countdown-text {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 160px;
+  font-weight: bold;
+  z-index: 45;
+}
+.bottom-tip {
+  position: fixed;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 18px;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+.bottom-tip.visible {
+  opacity: 0.6;
+  pointer-events: all;
+}
+</style>
+</head>
+<body>
+<button class="theme-switch" id="themeBtn">切换黑白模式</button>
+<div class="count-flash-mask" id="flashMask"></div>
+<div class="mouse-dot" id="dot"></div>
+
+<!-- 音频提示弹窗 -->
+<div class="audio-tip-modal" id="audioTipModal">
+  <div class="tip-box">
+    <div class="tip-title">音频提示</div>
+    <div class="tip-text">
+      进入游戏倒计时结束后会自动播放背景音乐，声音可能突然响起；
+      若对突发声音敏感，请提前调低设备音量后再确认。
+    </div>
+    <button class="confirm-tip-btn" id="confirmTipBtn">我已知晓，确认开始</button>
+  </div>
+</div>
+
+<!-- 主菜单 -->
+<div class="start-menu" id="menuBox">
+  <h1 class="menu-title">稳态平衡挑战</h1>
+  <p class="menu-desc">移动鼠标控制圆点，保持圆点圆心在圆圈内持续回血；<br>默认挑战难度，圆环随机大小，不会随时间缩小</p>
+  <p class="menu-record">历史最高纪录：<span id="menuBest">0.00</span> 秒</p>
+  <button class="start-btn-menu" id="enterGameBtn">开始挑战</button>
+</div>
+
+<div class="result-panel" id="resultPanel">
+  <div class="result-box">
+    <h2 class="result-title">挑战结束</h2>
+    <div class="result-data">
+      <p>本局时长：<span id="finalTime">0.00</span> s</p>
+      <p>历史最高：<span id="finalBest">0.00</span> s</p>
+      <p id="newRecordTip" style="color:#22c55e;display:none;">🎉 刷新最高纪录！</p>
+    </div>
+    <div class="result-buttons">
+      <button class="res-btn retry-btn" id="retryBtn">再来一局</button>
+      <button class="res-btn home-btn" id="homeBtn">返回主页</button>
+    </div>
+  </div>
+</div>
+
+<div class="game-ui-wrap" id="gameUI">
+  <div class="info-row">
+    <div>当前时长：<span id="currentTime">0.00</span>s</div>
+    <div>最高纪录：<span id="bestRecord">0.00</span>s</div>
+  </div>
+  <div class="hp-container">
+    <div class="hp-fill" id="hpBar"></div>
+  </div>
+</div>
+
+<div class="target-ring" id="ring"></div>
+<div class="countdown-text" id="countText"></div>
+<div class="bottom-tip" id="gameTip">圈内回血速度更快，圈外掉血；圆环随机尺寸，不会随时间缩小</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+// 全局元素获取
+const body = document.body;
+const themeBtn = document.getElementById("themeBtn");
+const flashMask = document.getElementById("flashMask");
+const countText = document.getElementById("countText");
+const dot = document.getElementById("dot");
+const menuBox = document.getElementById("menuBox");
+const enterGameBtn = document.getElementById("enterGameBtn");
+const menuBest = document.getElementById("menuBest");
+const resultPanel = document.getElementById("resultPanel");
+const finalTime = document.getElementById("finalTime");
+const finalBest = document.getElementById("finalBest");
+const newRecordTip = document.getElementById("newRecordTip");
+const retryBtn = document.getElementById("retryBtn");
+const homeBtn = document.getElementById("homeBtn");
+const gameUI = document.getElementById("gameUI");
+const gameTip = document.getElementById("gameTip");
+const ring = document.getElementById("ring");
+const hpBar = document.getElementById("hpBar");
+const currentTime = document.getElementById("currentTime");
+const bestRecord = document.getElementById("bestRecord");
+// 音频弹窗
+const audioTipModal = document.getElementById("audioTipModal");
+const confirmTipBtn = document.getElementById("confirmTipBtn");
+
+// 游戏背景音乐
+let bgmAudio = null;
+let audioAvailable = false;
+function initAudio() {
+  const audio = new Audio("bgm.mp3");
+  audio.loop = true;
+  audio.preload = "auto";
+  audio.volume = 0.3;
+  audio.addEventListener("canplaythrough", () => {
+    audioAvailable = true;
+    bgmAudio = audio;
+    console.log("bgm.mp3 加载完成");
+  });
+  audio.addEventListener("error", () => {
+    audioAvailable = false;
+    bgmAudio = null;
+    console.log("未找到bgm.mp3，无背景音乐");
+  });
+}
+initAudio();
+
+// 菜单波纹
+function createRipple(x, y) {
+  if(menuBox.classList.contains('hidden')) return;
+  const ripple = document.createElement('div');
+  ripple.className = 'ripple';
+  ripple.style.left = x + 'px';
+  ripple.style.top = y + 'px';
+  menuBox.appendChild(ripple);
+  setTimeout(()=>ripple.remove(), 800);
+}
+menuBox.addEventListener('click', e=>createRipple(e.clientX, e.clientY));
+
+// 挑战难度常量
+const DOT_RADIUS = 11;
+const RING_MIN_SIZE = 45;
+const RING_MAX_SIZE = 80;
+const MAX_HP = 100;
+const BASE_HEAL = 2.2;
+const BASE_DRAIN = 1.4;
+const maxDistanceFactor = 0.9;
+const damageMul = 2.0;
+const realHeal = BASE_HEAL;
+const realDrain = BASE_DRAIN * damageMul;
+const AREA_TOP_Y = 180;
+const AREA_BOTTOM_Y = window.innerHeight - 100;
+const REFRESH_INTERVAL = 3000;
+const HP_TICK_RATE = 50;
+
+// 游戏状态
+let isPlaying = false;
+let isCountingDown = false;
+let lockDotMove = false;
+let isDarkTheme = false;
+let startTime = 0;
+let bestScore = Number(localStorage.getItem("balanceMax")) || 0;
+let hp = MAX_HP;
+let mouseX = window.innerWidth / 2;
+let mouseY = window.innerHeight / 2;
+let ringX = window.innerWidth / 2;
+let ringY = window.innerHeight / 2;
+let ringSize = 60;
+let ringOpacity = 1;
+let frameId = null;
+let ringTimer = null;
+let hpTimer = null;
+// 新增：标记是否是开局第一次刷新圆环
+let firstRingSpawn = true;
+
+menuBest.textContent = bestScore.toFixed(2);
+bestRecord.textContent = bestScore.toFixed(2);
+hpBar.style.width = hp + "%";
+
+function resetRingStyle() {
+  ring.style.width = ringSize + "px";
+  ring.style.height = ringSize + "px";
+  ring.style.left = ringX + "px";
+  ring.style.top = ringY + "px";
+  ring.style.transform = "translate(-50%, -50%)";
+  ring.style.opacity = ringOpacity;
+}
+
+themeBtn.addEventListener('click', () => {
+  body.classList.toggle("dark-mode");
+  isDarkTheme = body.classList.contains("dark-mode");
+});
+
+document.addEventListener("mousemove", e => {
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+  if (!lockDotMove) {
+    dot.style.left = mouseX + "px";
+    dot.style.top = mouseY + "px";
+  }
+});
+
+// 圆环判定
+function isInsideCircle() {
+  const dx = mouseX - ringX;
+  const dy = mouseY - ringY;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const ringRadius = ringSize / 2;
+  const safeRange = ringRadius - DOT_RADIUS;
+  return dist <= safeRange;
+}
+
+// 随机圆环：开局强制居中，之后随机
+function randomUpdateRing() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const centerX = w / 2;
+  const centerY = h / 2;
+  const halfR = ringSize / 2;
+  const minY = AREA_TOP_Y + halfR;
+  const maxY = AREA_BOTTOM_Y - halfR;
+
+  ringSize = RING_MIN_SIZE + Math.random() * (RING_MAX_SIZE - RING_MIN_SIZE);
+
+  if (firstRingSpawn) {
+    // 第一次生成：固定屏幕中心
+    ringX = centerX;
+    ringY = centerY;
+    firstRingSpawn = false;
+  } else {
+    // 后续刷新：随机位置
+    const maxOffsetX = w * maxDistanceFactor;
+    const maxOffsetY = (maxY - minY) * maxDistanceFactor;
+    const offsetX = (Math.random() * 2 - 1) * maxOffsetX;
+    const offsetY = (Math.random() * 2 - 1) * maxOffsetY;
+
+    let targetX = centerX + offsetX;
+    let targetY = centerY + offsetY;
+
+    targetX = Math.max(halfR, Math.min(w - halfR, targetX));
+    targetY = Math.max(minY, Math.min(maxY, targetY));
+
+    ringX = targetX;
+    ringY = targetY;
+  }
+  resetRingStyle();
+}
+
+function updateHP() {
+  if (!isPlaying || isCountingDown) return;
+  if (isInsideCircle()) {
+    hp += realHeal;
+    hp = Math.min(hp, MAX_HP);
+  } else {
+    hp -= realDrain;
+    if (hp <= 0) gameOver();
+  }
+  hpBar.style.width = hp + "%";
+}
+
+function gameOver() {
+  isPlaying = false;
+  cancelAnimationFrame(frameId);
+  clearInterval(ringTimer);
+  clearInterval(hpTimer);
+  if(audioAvailable && bgmAudio){
+    bgmAudio.pause();
+    bgmAudio.currentTime = 0;
+  }
+  const totalSec = (Date.now() - startTime) / 1000;
+  currentTime.textContent = totalSec.toFixed(2);
+  finalBest.textContent = bestScore.toFixed(2);
+  newRecordTip.style.display = "none";
+  if (totalSec > bestScore) {
+    bestScore = totalSec;
+    bestRecord.textContent = bestScore.toFixed(2);
+    menuBest.textContent = bestScore.toFixed(2);
+    finalBest.textContent = bestScore.toFixed(2);
+    newRecordTip.style.display = "block";
+    localStorage.setItem("balanceMax", bestScore);
+  }
+  resultPanel.classList.add("show");
+}
+
+function gameLoop() {
+  if (!isPlaying) return;
+  const now = Date.now();
+  const totalSec = (now - startTime) / 1000;
+  currentTime.textContent = totalSec.toFixed(2);
+  frameId = requestAnimationFrame(gameLoop);
+}
+
+// 321倒计时
+function startCountDown(callback) {
+  isCountingDown = true;
+  lockDotMove = true;
+  let count = 3;
+  flashMask.classList.add("show");
+  const countInterval = setInterval(() => {
+    countText.textContent = count;
+    flashMask.style.background = count === 3 || count === 1 ? "#fff" : "#000";
+    countText.style.color = count === 3 || count === 1 ? "#000" : "#fff";
+    count--;
+    if (count < 0) {
+      clearInterval(countInterval);
+      countText.textContent = "";
+      flashMask.classList.remove("show");
+      flashMask.style.background = "";
+      isCountingDown = false;
+      lockDotMove = false;
+      gameUI.classList.add("visible");
+      gameTip.classList.add("visible");
+      // 倒计时结束播放音乐
+      if(audioAvailable && bgmAudio){
+        bgmAudio.play().catch(err=>console.log("音频拦截：",err));
+      }
+      callback();
+    }
+  }, 1000);
+}
+
+// 重置游戏数据
+function resetGameData() {
+  hp = MAX_HP;
+  hpBar.style.width = hp + "%";
+  firstRingSpawn = true; // 重置开局标记，下一局再次居中
+  randomUpdateRing();
+  mouseX = ringX;
+  mouseY = ringY;
+  dot.style.left = mouseX + "px";
+  dot.style.top = mouseY + "px";
+  currentTime.textContent = "0.00";
+  resultPanel.classList.remove("show");
+  gameUI.classList.remove("visible");
+  gameTip.classList.remove("visible");
+  clearInterval(ringTimer);
+  clearInterval(hpTimer);
+  cancelAnimationFrame(frameId);
+}
+
+function launchGame() {
+  resetGameData();
+  startCountDown(() => {
+    isPlaying = true;
+    startTime = Date.now();
+    ringTimer = setInterval(randomUpdateRing, REFRESH_INTERVAL);
+    hpTimer = setInterval(updateHP, HP_TICK_RATE);
+    gameLoop();
+  });
+}
+
+// 点击开始挑战 → 弹出提示弹窗
+enterGameBtn.addEventListener('click', () => {
+  audioTipModal.style.display = "flex";
+});
+
+// 确认弹窗：隐藏菜单+启动游戏
+confirmTipBtn.addEventListener('click', () => {
+  audioTipModal.style.display = "none";
+  menuBox.classList.add("hidden");
+  launchGame();
+});
+
+// 再来一局（无需弹窗，直接游戏）
+retryBtn.addEventListener('click', launchGame);
+
+// 返回主页：恢复菜单显示、暂停音乐
+homeBtn.addEventListener('click', () => {
+  resetGameData();
+  if(audioAvailable && bgmAudio){
+    bgmAudio.pause();
+    bgmAudio.currentTime = 0;
+  }
+  gameUI.classList.remove("visible");
+  gameTip.classList.remove("visible");
+  menuBox.classList.remove("hidden");
+});
+});
+</script>
+</body>
+</html>
