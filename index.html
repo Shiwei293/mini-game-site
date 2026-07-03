@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>367の小游戏</title>
+<title>RFFの小游戏</title>
 <style>
 :root {
   --bg: #0c0c0c;
@@ -18,7 +18,6 @@
   --hp-full: #fff;
   --hp-glow: rgba(0,0,0,0.6);
   --shadow: 0 10px 32px rgba(0,0,0,0.35);
-  --trans: all 0.32s cubic-bezier(0.22, 0, 0.2, 1);
   --ripple-dark: rgba(255,255,255,0.14);
   --light-radius: 220px;
 }
@@ -37,7 +36,6 @@ body {
   position: relative;
   cursor: none;
 }
-/* 全局黑暗遮罩 */
 .light-mask {
   position: fixed;
   inset: 0;
@@ -45,15 +43,12 @@ body {
   z-index: 2;
   background: radial-gradient(circle var(--light-radius) at var(--mouse-x, 50%) var(--mouse-y, 50%), transparent 0%, rgba(0,0,0,1) 100%);
 }
-/* 正常状态：仅灯光内可见 */
 .light-visible {
   mix-blend-mode: screen;
 }
-/* 刷新闪烁时：无视遮罩，全局可见 */
 .no-mask {
   mix-blend-mode: normal !important;
 }
-/* 鼠标光点发光 */
 .mouse-dot {
   position: fixed;
   width: 22px;
@@ -67,7 +62,6 @@ body {
   will-change: left, top;
   box-shadow: 0 0 12px #fff, 0 0 40px rgba(255,255,220,0.5), 0 0 80px rgba(255,255,200,0.3);
 }
-/* 倒计时遮罩：彻底透明无背景 */
 .count-flash-mask {
   position: fixed;
   inset: 0;
@@ -81,7 +75,6 @@ body {
   pointer-events: all;
   background: transparent !important;
 }
-/* 主菜单 */
 .start-menu {
   position: fixed;
   inset: 0;
@@ -142,7 +135,6 @@ body {
 .start-btn-menu:hover {
   scale: 1.05;
 }
-/* 结算弹窗 */
 .result-panel {
   position: fixed;
   inset: 0;
@@ -198,7 +190,6 @@ body {
 .res-btn:hover {
   scale: 1.05;
 }
-/* 游戏UI */
 .game-ui-wrap {
   position: fixed;
   top: 30px;
@@ -216,20 +207,26 @@ body {
 }
 .info-row {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
   margin-bottom: 16px;
   font-size: 36px;
   font-weight: 500;
   text-shadow: 0 0 6px var(--text-glow), 0 0 12px var(--text-glow);
 }
-/* 血条 */
+.time-text {
+  text-align: center;
+}
+.hp-row {
+  width: 100%;
+}
 .hp-container {
   width: 100%;
   height: 14px;
   border-radius: 999px;
   background: var(--hp-empty);
   overflow: hidden;
-  margin-bottom: 20px;
   box-shadow: 0 0 5px var(--hp-glow), 0 0 10px var(--hp-glow);
 }
 .hp-fill {
@@ -240,14 +237,11 @@ body {
   box-shadow: 0 0 4px var(--hp-glow) inset;
   transition: width 0.04s linear;
 }
-/* 炫酷旋转光效判定圈 */
 .target-ring {
   position: fixed;
-  width: 60px;
-  height: 60px;
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  transition: left 0.4s ease, top 0.4s ease, box-shadow 0.1s ease;
+  transition: width 0.15s linear, height 0.15s linear;
   z-index: 1;
   animation: ringGlowSpin 2.5s linear infinite;
   border: 3px solid transparent;
@@ -279,7 +273,6 @@ body {
     transform: translate(-50%, -50%) rotate(360deg);
   }
 }
-/* 倒计时数字：纯白发光，无底色干扰 */
 .countdown-text {
   position: fixed;
   left: 50%;
@@ -331,33 +324,34 @@ body {
   </div>
 </div>
 
-<div class="game-ui-wrap light-visible" id="gameUI">
-  <div class="info-row">
-    <div>剩余时间：<span id="currentTime">105.00</span>s</div>
-    <div>血量：<span id="hpNum">100</span></div>
-  </div>
-  <div class="hp-container">
-    <div class="hp-fill" id="hpBar"></div>
-  </div>
-</div>
-
 <div class="target-ring light-visible" id="ring"></div>
 <div class="countdown-text light-visible" id="countText"></div>
 <div class="bottom-tip light-visible" id="gameTip">只有鼠标光照区域可见圆环；圈内回血，圈外缓慢扣血</div>
 
+<div class="game-ui-wrap light-visible" id="gameUI">
+  <div class="info-row">
+    <!-- 时间单独居中 -->
+    <div class="time-text">剩余时间：<span id="currentTime">105.00</span>s</div>
+    <!-- 只保留血条，删掉血量数字 -->
+    <div class="hp-row">
+      <div class="hp-container">
+        <div class="hp-fill" id="hpBar"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 const CONFIG = {
   DOT_RADIUS: 11,
-  RING_MIN_SIZE: 45,
-  RING_MAX_SIZE: 80,
+  RING_START_SIZE: 60,
+  RING_MIN_SIZE: 28,
+  RING_SHRINK_SPEED: 0.07,
+  REFRESH_SECONDS: 2,
   MAX_HP: 100,
   MIN_HP: 0,
   HEAL_RATE: 2.2,
   DRAIN_RATE: 0.8,
-  DRAIN_MUL: 1.0,
-  MAX_OFFSET_FACTOR: 0.9,
-  AREA_TOP_OFFSET: 180,
-  REFRESH_INTERVAL: 3000,
   HP_TICK_MS: 50,
   TOTAL_GAME_TIME: 105,
   BLINK_DELAY: 500,
@@ -367,7 +361,7 @@ const CONFIG = {
   GAME_AREA_BOTTOM: window.innerHeight - 100,
   GAME_AREA_LEFT: 20,
   GAME_AREA_RIGHT: window.innerWidth - 20,
-  SHAKE_STIFFNESS: 0.05,
+  SHAKE_STIFFNESS: 0.08,
   SHAKE_DAMPING: 0.14,
   MAX_SHAKE_RANGE: 13
 };
@@ -375,7 +369,6 @@ const CONFIG = {
 const state = {
   playing: false,
   countingDown: false,
-  lockPointer: false,
   startTime: 0,
   bestScore: Number(localStorage.getItem("balanceMax")) || 0,
   hp: CONFIG.MAX_HP,
@@ -385,16 +378,17 @@ const state = {
   mouseY: window.innerHeight / 2,
   ringX: window.innerWidth / 2,
   ringY: window.innerHeight / 2,
-  ringSize:60,
-  ringOpacity:1,
+  ringSize: CONFIG.RING_START_SIZE,
   animFrame: null,
-  ringTimer: null,
   hpTimer: null,
   firstRingSpawn: true,
   shakeX: 0,
   shakeY: 0,
   shakeVelX: 0,
-  shakeVelY: 0
+  shakeVelY: 0,
+  lightDotX: window.innerWidth / 2,
+  lightDotY: window.innerHeight / 2,
+  ringStayTimer: 0
 };
 
 const el = {
@@ -415,7 +409,6 @@ const el = {
   ring: document.getElementById("ring"),
   hpBar: document.getElementById("hpBar"),
   currentTime: document.getElementById("currentTime"),
-  hpNum: document.getElementById("hpNum"),
   resultTitle: document.getElementById("resultTitle")
 };
 
@@ -440,7 +433,8 @@ el.menuBox.addEventListener("click", e => createRipple(e.clientX, e.clientY));
 function applyRingStyle() {
   el.ring.style.left = state.ringX + "px";
   el.ring.style.top = state.ringY + "px";
-  el.ring.style.opacity = state.ringOpacity;
+  el.ring.style.width = state.ringSize + "px";
+  el.ring.style.height = state.ringSize + "px";
 }
 
 document.addEventListener("mousemove", e => {
@@ -456,9 +450,9 @@ document.addEventListener("touchmove", e => {
 }, { passive: false });
 
 function isInRing() {
-  const dx = state.mouseX - state.ringX;
-  const dy = state.mouseY - state.ringY;
-  const dist = Math.sqrt(dx * dx + dy * dy);
+  const dx = state.lightDotX - state.ringX;
+  const dy = state.lightDotY - state.ringY;
+  const dist = Math.hypot(dx, dy);
   const r = state.ringSize / 2;
   return dist <= r - CONFIG.DOT_RADIUS;
 }
@@ -474,20 +468,16 @@ function refreshRing() {
     randomX = CONFIG.GAME_AREA_LEFT + Math.random() * rangeX;
     randomY = CONFIG.GAME_AREA_TOP + Math.random() * rangeY;
   }
-  state.ringSize = CONFIG.RING_MIN_SIZE + Math.random() * (CONFIG.RING_MAX_SIZE - CONFIG.RING_MIN_SIZE);
-  el.ring.style.width = state.ringSize + "px";
-  el.ring.style.height = state.ringSize + "px";
-  if (state.firstRingSpawn) {
-    state.ringX = randomX;
-    state.ringY = randomY;
-    state.firstRingSpawn = false;
-  } else {
+  state.ringSize = CONFIG.RING_START_SIZE;
+  state.ringX = randomX;
+  state.ringY = randomY;
+  state.ringStayTimer = 0;
+  if (!state.firstRingSpawn) {
     el.ring.classList.add("blink", "no-mask");
     setTimeout(() => el.ring.classList.remove("blink", "no-mask"), CONFIG.BLINK_DELAY);
-    state.ringX = randomX;
-    state.ringY = randomY;
   }
   applyRingStyle();
+  if (state.firstRingSpawn) state.firstRingSpawn = false;
 }
 
 function tickHP() {
@@ -498,16 +488,14 @@ function tickHP() {
 
 function gameLoop() {
   if (!state.playing) return;
-  // 帧同步弹簧平滑抖动，固定上限13像素，幅度统一无忽大忽小
   const targetShakeX = (Math.random() - 0.5) * CONFIG.MAX_SHAKE_RANGE;
   const targetShakeY = (Math.random() - 0.5) * CONFIG.MAX_SHAKE_RANGE;
   state.shakeVelX += (targetShakeX - state.shakeX) * CONFIG.SHAKE_STIFFNESS;
-  state.shakeVelY += (targetShakeY - state.shakeY) * CONFIG.SHAKE_STIFFNESS;
+  state.shakeVelY += (targetShakeY - state.shakeY) * CONFIG.SHAKE_DAMPING;
   state.shakeVelX *= (1 - CONFIG.SHAKE_DAMPING);
   state.shakeVelY *= (1 - CONFIG.SHAKE_DAMPING);
   state.shakeX += state.shakeVelX;
   state.shakeY += state.shakeVelY;
-  // 严格限制最大偏移不超过13
   const shakeDist = Math.hypot(state.shakeX, state.shakeY);
   if (shakeDist > CONFIG.MAX_SHAKE_RANGE) {
     const scale = CONFIG.MAX_SHAKE_RANGE / shakeDist;
@@ -516,16 +504,29 @@ function gameLoop() {
     state.shakeVelX *= 0.4;
     state.shakeVelY *= 0.4;
   }
-  const renderX = state.mouseX + state.shakeX;
-  const renderY = state.mouseY + state.shakeY;
-  el.dot.style.left = renderX + "px";
-  el.dot.style.top = renderY + "px";
-  el.body.style.setProperty("--mouse-x", renderX + "px");
-  el.body.style.setProperty("--mouse-y", renderY + "px");
+  state.lightDotX = state.mouseX + state.shakeX;
+  state.lightDotY = state.mouseY + state.shakeY;
+  el.dot.style.left = state.lightDotX + "px";
+  el.dot.style.top = state.lightDotY + "px";
+  el.body.style.setProperty("--mouse-x", state.lightDotX + "px");
+  el.body.style.setProperty("--mouse-y", state.lightDotY + "px");
 
   const pass = (Date.now() - state.startTime) / 1000;
   state.remainTime = CONFIG.TOTAL_GAME_TIME - pass;
   el.currentTime.textContent = state.remainTime.toFixed(2);
+
+  if (isInRing()) {
+    const deltaFrame = 1 / 60;
+    state.ringStayTimer += deltaFrame;
+    if (state.ringStayTimer >= CONFIG.REFRESH_SECONDS) {
+      refreshRing();
+    }
+  }
+
+  let shrinkDelta = pass * CONFIG.RING_SHRINK_SPEED;
+  state.ringSize = Math.max(CONFIG.RING_MIN_SIZE, CONFIG.RING_START_SIZE - shrinkDelta);
+  applyRingStyle();
+
   if (state.remainTime <= 0) {
     endGame(true);
     return;
@@ -533,7 +534,6 @@ function gameLoop() {
   state.smoothHp += (state.hp - state.smoothHp) * CONFIG.HP_LERP_SPEED;
   state.smoothHp = Math.max(CONFIG.MIN_HP, Math.min(CONFIG.MAX_HP, state.smoothHp));
   el.hpBar.style.width = state.smoothHp + "%";
-  el.hpNum.textContent = Math.floor(state.smoothHp);
   if (state.smoothHp <= CONFIG.EPS) {
     endGame(false);
     return;
@@ -545,7 +545,6 @@ function endGame(isWin) {
   if (!state.playing) return;
   state.playing = false;
   cancelAnimationFrame(state.animFrame);
-  clearInterval(state.ringTimer);
   clearInterval(state.hpTimer);
   if (audioInst) audioInst.pause();
   const playTime = CONFIG.TOTAL_GAME_TIME - state.remainTime;
@@ -564,11 +563,8 @@ function startCountdown(cb) {
   state.countingDown = true;
   let cnt = 3;
   el.flashMask.classList.add("show");
-  el.flashMask.style.background = "transparent";
   const timer = setInterval(() => {
     el.countText.textContent = cnt;
-    el.countText.style.color = "#ffffff";
-    el.countText.style.textShadow = "0 0 12px rgba(255,255,255,0.9), 0 0 24px rgba(255,255,255,0.6)";
     cnt--;
     if (cnt < 0) {
       clearInterval(timer);
@@ -597,21 +593,20 @@ function resetGame() {
   state.firstRingSpawn = true;
   state.mouseX = window.innerWidth / 2;
   state.mouseY = window.innerHeight / 2;
-  state.shakeX = 0;
-  state.shakeY = 0;
-  state.shakeVelX = 0;
-  state.shakeVelY = 0;
+  state.shakeX = state.shakeY = state.shakeVelX = state.shakeVelY = 0;
+  state.lightDotX = state.mouseX;
+  state.lightDotY = state.mouseY;
+  state.ringSize = CONFIG.RING_START_SIZE;
+  state.ringStayTimer = 0;
   el.hpBar.style.width = state.smoothHp + "%";
-  el.hpNum.textContent = Math.floor(state.smoothHp);
   el.currentTime.textContent = state.remainTime.toFixed(2);
-  el.dot.style.left = state.mouseX + "px";
-  el.dot.style.top = state.mouseY + "px";
-  el.body.style.setProperty("--mouse-x", state.mouseX + "px");
-  el.body.style.setProperty("--mouse-y", state.mouseY + "px");
+  el.dot.style.left = state.lightDotX + "px";
+  el.dot.style.top = state.lightDotY + "px";
+  el.body.style.setProperty("--mouse-x", state.lightDotX + "px");
+  el.body.style.setProperty("--mouse-y", state.lightDotY + "px");
   el.resultPanel.classList.remove("show");
   el.gameUI.classList.remove("visible");
   el.gameTip.classList.remove("visible");
-  clearInterval(state.ringTimer);
   clearInterval(state.hpTimer);
   cancelAnimationFrame(state.animFrame);
   refreshRing();
@@ -624,7 +619,6 @@ function launchGame() {
   startCountdown(() => {
     state.playing = true;
     state.startTime = Date.now();
-    state.ringTimer = setInterval(refreshRing, CONFIG.REFRESH_INTERVAL);
     state.hpTimer = setInterval(tickHP, CONFIG.HP_TICK_MS);
     gameLoop();
   });
@@ -641,7 +635,6 @@ el.homeBtn.addEventListener("click", () => {
 el.body.style.setProperty("--mouse-x", state.mouseX + "px");
 el.body.style.setProperty("--mouse-y", state.mouseY + "px");
 el.menuBest.textContent = state.bestScore.toFixed(2);
-el.hpNum.textContent = Math.floor(state.smoothHp);
 el.currentTime.textContent = state.remainTime.toFixed(2);
 applyRingStyle();
 </script>
