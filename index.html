@@ -329,16 +329,17 @@ body {
   <div class="tip-box">
     <div class="tip-title">音频提示</div>
     <div class="tip-text">
-      进入游戏倒计时结束后会自动播放背景音乐，声音可能突然响起；
+      点击确认后将开启背景音乐，进入游戏倒计时结束自动播放；
       若对突发声音敏感，请提前调低设备音量后再确认。
     </div>
-    <button class="confirm-tip-btn" id="confirmTipBtn">我已严肃知晓</button>
+    <button class="confirm-tip-btn" id="confirmTipBtn">我已知晓，确认开启音乐</button>
   </div>
 </div>
 
 <div class="start-menu" id="menuBox">
   <h1 class="menu-title">稳态平衡挑战</h1>
-  <p class="menu-desc">通关解锁旮旯给母</p>
+  <p class="menu-desc">移动鼠标灯光，只有光照范围内才能看见判定圈；圈内回血，圈外缓慢扣血</p>
+  <p class="menu-record">历史最高纪录：<span id="menuBest">0.00</span> 秒</p>
   <button class="start-btn-menu" id="enterGameBtn">开始挑战</button>
 </div>
 
@@ -405,7 +406,8 @@ const state = {
   animFrame: null,
   ringTimer: null,
   hpTimer: null,
-  firstRingSpawn: true
+  firstRingSpawn: true,
+  audioAllowed: false // 音乐播放前置开关：仅点击确认按钮后为true
 };
 
 const el = {
@@ -434,14 +436,26 @@ const el = {
 
 let audioInst = null;
 let audioReady = false;
+// 延迟初始化音频，等待用户点击确认后再创建
 function initAudio() {
   const audio = new Audio("bgm.mp3");
   audio.loop = true;
   audio.volume = 0.3;
-  audio.addEventListener("canplaythrough", () => audioReady = true);
+  audio.addEventListener("canplaythrough", () => {
+    audioReady = true;
+    audioInst = audio;
+  });
   audio.addEventListener("error", () => audioInst = null);
+  return audio;
 }
-initAudio();
+
+// 点击确认按钮：开启音乐权限（前置交互条件）
+el.confirmTipBtn.addEventListener("click", () => {
+  state.audioAllowed = true;
+  el.audioTipModal.style.display = "none";
+  // 初始化音频实例
+  if (!audioInst) audioInst = initAudio();
+});
 
 function createRipple(x, y) {
   const ripple = document.createElement("div");
@@ -557,10 +571,8 @@ function endGame(isWin) {
   cancelAnimationFrame(state.animFrame);
   clearInterval(state.ringTimer);
   clearInterval(state.hpTimer);
-  if (audioReady && audioInst) {
-    audioInst.pause();
-    audioInst.currentTime = 0;
-  }
+  // 游戏结束暂停音乐
+  if (audioInst) audioInst.pause();
   const playTime = CONFIG.TOTAL_GAME_TIME - state.remainTime;
   el.newRecordTip.style.display = "none";
   el.resultTitle.textContent = isWin ? "挑战成功" : "挑战失败";
@@ -593,7 +605,8 @@ function startCountdown(cb) {
       state.countingDown = false;
       el.gameUI.classList.add("visible");
       el.gameTip.classList.add("visible");
-      if (audioReady && audioInst) audioInst.play().catch(() => {});
+      // 满足前置交互条件才播放音乐
+      if (state.audioAllowed && audioInst) audioInst.play().catch(() => {});
       cb();
     }
   }, 1000);
@@ -633,22 +646,16 @@ function launchGame() {
   });
 }
 
+// 开始游戏按钮弹出音乐确认弹窗
 el.enterGameBtn.addEventListener("click", () => el.audioTipModal.style.display = "flex");
-el.confirmTipBtn.addEventListener("click", () => {
-  el.audioTipModal.style.display = "none";
-  el.menuBox.classList.add("hidden");
-  launchGame();
-});
 el.retryBtn.addEventListener("click", launchGame);
 el.homeBtn.addEventListener("click", () => {
   resetGame();
-  if (audioReady && audioInst) {
-    audioInst.pause();
-    audioInst.currentTime = 0;
-  }
+  if (audioInst) audioInst.pause();
   el.menuBox.classList.remove("hidden");
 });
 
+// 页面初始化灯光位置
 el.body.style.setProperty("--mouse-x", state.mouseX + "px");
 el.body.style.setProperty("--mouse-y", state.mouseY + "px");
 el.menuBest.textContent = state.bestScore.toFixed(2);
