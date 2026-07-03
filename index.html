@@ -22,7 +22,6 @@
   --ripple-dark: rgba(255,255,255,0.14);
   --light-radius: 220px;
 }
-  
 * {
   margin: 0;
   padding: 0;
@@ -289,7 +288,7 @@ body {
 
 <div class="start-menu" id="menuBox">
   <h1 class="menu-title">稳态平衡挑战</h1>
-  <p class="menu-desc">通关以获取galgame游玩权限</p>
+  <p class="menu-desc">移动鼠标灯光，只有光照范围内才能看见判定圈；圈内回血，圈外缓慢扣血</p>
   <p class="menu-record">历史最高纪录：<span id="menuBest">0.00</span> 秒</p>
   <button class="start-btn-menu" id="enterGameBtn">开始挑战</button>
 </div>
@@ -307,8 +306,8 @@ body {
 
 <div class="game-ui-wrap light-visible" id="gameUI">
   <div class="info-row">
-    <div>剩余时间：<span id="currentTime">60.00</span>s</div>
-    <div>血量：<span id="bestRecord">100</span></div>
+    <div>剩余时间：<span id="currentTime">105.00</span>s</div>
+    <div>血量：<span id="hpNum">100</span></div>
   </div>
   <div class="hp-container">
     <div class="hp-fill" id="hpBar"></div>
@@ -317,7 +316,7 @@ body {
 
 <div class="target-ring light-visible" id="ring"></div>
 <div class="countdown-text light-visible" id="countText"></div>
-<div class="bottom-tip light-visible" id="gameTip">为了wanfeng galgame游玩权限</div>
+<div class="bottom-tip light-visible" id="gameTip">只有鼠标光照区域可见圆环；圈内回血，圈外缓慢扣血</div>
 
 <script>
 const CONFIG = {
@@ -327,17 +326,16 @@ const CONFIG = {
   MAX_HP: 100,
   MIN_HP: 0,
   HEAL_RATE: 2.2,
-  DRAIN_RATE: 0.8, // 扣血：原版1.4 > 0.8 > 旧慢速0.4
+  DRAIN_RATE: 0.8,
   DRAIN_MUL: 1.0,
   MAX_OFFSET_FACTOR: 0.9,
   AREA_TOP_OFFSET: 180,
   REFRESH_INTERVAL: 3000,
   HP_TICK_MS: 50,
-  TOTAL_GAME_TIME: 60,
-  BLINK_DELAY: 500, // 0.5秒全屏闪烁解除遮罩
+  TOTAL_GAME_TIME: 105, // 1分45秒=105秒
+  BLINK_DELAY: 500,
   HP_LERP_SPEED: 0.08,
   EPS: 0.01,
-  // 游戏红色边框生成区域边界（避开顶部UI、底部提示文字）
   GAME_AREA_TOP: 140,
   GAME_AREA_BOTTOM: window.innerHeight - 100,
   GAME_AREA_LEFT: 20,
@@ -383,12 +381,11 @@ const el = {
   ring: document.getElementById("ring"),
   hpBar: document.getElementById("hpBar"),
   currentTime: document.getElementById("currentTime"),
-  bestRecord: document.getElementById("bestRecord"),
+  hpNum: document.getElementById("hpNum"),
   resultTitle: document.getElementById("resultTitle")
 };
 
 let audioInst = null;
-// 点击开始游戏时初始化音频，满足浏览器交互前置
 function initAudio() {
   const audio = new Audio("bgm.mp3");
   audio.loop = true;
@@ -442,7 +439,6 @@ function isInRing() {
 
 function refreshRing() {
   let randomX, randomY;
-  // 第一圈固定屏幕正中间，后续随机在红色游戏区域
   if (state.firstRingSpawn) {
     randomX = window.innerWidth / 2;
     randomY = window.innerHeight / 2;
@@ -452,11 +448,9 @@ function refreshRing() {
     randomX = CONFIG.GAME_AREA_LEFT + Math.random() * rangeX;
     randomY = CONFIG.GAME_AREA_TOP + Math.random() * rangeY;
   }
-
   state.ringSize = CONFIG.RING_MIN_SIZE + Math.random() * (CONFIG.RING_MAX_SIZE - CONFIG.RING_MIN_SIZE);
   el.ring.style.width = state.ringSize + "px";
   el.ring.style.height = state.ringSize + "px";
-
   if (state.firstRingSpawn) {
     state.ringX = randomX;
     state.ringY = randomY;
@@ -488,7 +482,7 @@ function gameLoop() {
   state.smoothHp += (state.hp - state.smoothHp) * CONFIG.HP_LERP_SPEED;
   state.smoothHp = Math.max(CONFIG.MIN_HP, Math.min(CONFIG.MAX_HP, state.smoothHp));
   el.hpBar.style.width = state.smoothHp + "%";
-  el.bestRecord.textContent = Math.floor(state.smoothHp);
+  el.hpNum.textContent = Math.floor(state.smoothHp);
   if (state.smoothHp < CONFIG.EPS) {
     endGame(false);
     return;
@@ -532,7 +526,7 @@ function startCountdown(cb) {
       el.gameUI.classList.add("visible");
       el.gameTip.classList.add("visible");
       if (audioInst) {
-        audioInst.currentTime = 0; // 每局从头播放
+        audioInst.currentTime = 0;
         audioInst.play().catch(() => {});
       }
       cb();
@@ -541,7 +535,6 @@ function startCountdown(cb) {
 }
 
 function resetGame() {
-  // 音乐重置到开头
   if (audioInst) {
     audioInst.pause();
     audioInst.currentTime = 0;
@@ -549,11 +542,11 @@ function resetGame() {
   state.hp = CONFIG.MAX_HP;
   state.smoothHp = CONFIG.MAX_HP;
   state.remainTime = CONFIG.TOTAL_GAME_TIME;
-  state.firstRingSpawn = true; // 重置标记，下一局开局圈回到中间
+  state.firstRingSpawn = true;
   state.mouseX = window.innerWidth / 2;
   state.mouseY = window.innerHeight / 2;
   el.hpBar.style.width = state.smoothHp + "%";
-  el.bestRecord.textContent = Math.floor(state.smoothHp);
+  el.hpNum.textContent = Math.floor(state.smoothHp);
   el.currentTime.textContent = state.remainTime.toFixed(2);
   el.dot.style.left = state.mouseX + "px";
   el.dot.style.top = state.mouseY + "px";
@@ -585,13 +578,14 @@ el.enterGameBtn.addEventListener("click", launchGame);
 el.retryBtn.addEventListener("click", launchGame);
 el.homeBtn.addEventListener("click", () => {
   resetGame();
+  if (audioInst) audioInst.pause();
   el.menuBox.classList.remove("hidden");
 });
 
 el.body.style.setProperty("--mouse-x", state.mouseX + "px");
 el.body.style.setProperty("--mouse-y", state.mouseY + "px");
 el.menuBest.textContent = state.bestScore.toFixed(2);
-el.bestRecord.textContent = Math.floor(state.smoothHp);
+el.hpNum.textContent = Math.floor(state.smoothHp);
 el.currentTime.textContent = state.remainTime.toFixed(2);
 applyRingStyle();
 </script>
