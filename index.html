@@ -440,11 +440,17 @@ function isInRing() {
 }
 
 function refreshRing() {
-  // 仅在红色游戏边框内随机生成坐标
-  const rangeX = CONFIG.GAME_AREA_RIGHT - CONFIG.GAME_AREA_LEFT;
-  const rangeY = CONFIG.GAME_AREA_BOTTOM - CONFIG.GAME_AREA_TOP;
-  const randomX = CONFIG.GAME_AREA_LEFT + Math.random() * rangeX;
-  const randomY = CONFIG.GAME_AREA_TOP + Math.random() * rangeY;
+  let randomX, randomY;
+  // 第一圈固定屏幕正中间，后续随机在红色游戏区域
+  if (state.firstRingSpawn) {
+    randomX = window.innerWidth / 2;
+    randomY = window.innerHeight / 2;
+  } else {
+    const rangeX = CONFIG.GAME_AREA_RIGHT - CONFIG.GAME_AREA_LEFT;
+    const rangeY = CONFIG.GAME_AREA_BOTTOM - CONFIG.GAME_AREA_TOP;
+    randomX = CONFIG.GAME_AREA_LEFT + Math.random() * rangeX;
+    randomY = CONFIG.GAME_AREA_TOP + Math.random() * rangeY;
+  }
 
   state.ringSize = CONFIG.RING_MIN_SIZE + Math.random() * (CONFIG.RING_MAX_SIZE - CONFIG.RING_MIN_SIZE);
   el.ring.style.width = state.ringSize + "px";
@@ -542,7 +548,7 @@ function resetGame() {
   state.hp = CONFIG.MAX_HP;
   state.smoothHp = CONFIG.MAX_HP;
   state.remainTime = CONFIG.TOTAL_GAME_TIME;
-  state.firstRingSpawn = true;
+  state.firstRingSpawn = true; // 重置标记，下一局开局圈回到中间
   state.mouseX = window.innerWidth / 2;
   state.mouseY = window.innerHeight / 2;
   el.hpBar.style.width = state.smoothHp + "%";
