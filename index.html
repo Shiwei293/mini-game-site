@@ -51,7 +51,7 @@ body {
   position: relative;
   cursor: none;
 }
-/* 鼠标圆点无延迟 */
+/* 鼠标圆点零延迟 */
 .mouse-dot {
   position: fixed;
   width: 22px;
@@ -202,7 +202,7 @@ button:hover ~ .mouse-dot {
 .start-btn-menu:hover {
   scale: 1.05;
 }
-/* 结算弹窗（删除时长、最高分文字） */
+/* 结算弹窗（删除时长、历史最高） */
 .result-panel {
   position: fixed;
   inset: 0;
@@ -280,7 +280,7 @@ button:hover ~ .mouse-dot {
   font-weight: 500;
   text-shadow: 0 0 6px var(--text-glow), 0 0 12px var(--text-glow);
 }
-/* 血条容器 */
+/* 血条顺滑过渡 */
 .hp-container {
   width: 100%;
   height: 14px;
@@ -292,18 +292,18 @@ button:hover ~ .mouse-dot {
 }
 .hp-fill {
   height: 100%;
-  /* 移除过渡，实现数字与血条1:1同步无延迟 */
-  transition: none;
+  width: 100%;
   background: var(--hp-full);
   border-radius: 999px;
   box-shadow: 0 0 4px var(--hp-glow) inset;
+  transition: width 0.04s linear;
 }
 /* 目标圆环 + 自身闪烁 */
 .target-ring {
   position: absolute;
   border: 3px solid var(--ring-stroke);
   border-radius: 50%;
-  transition: left 0.4s ease, top 0.4s ease, width 0.4s ease, height 0.4s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+  transition: left 0.4s ease, top 0.4s ease, width 0.4s ease, height 0.4s ease, border-color 0.1s ease, box-shadow 0.1s ease;
   z-index: 1;
 }
 .target-ring.blink {
@@ -348,7 +348,7 @@ button:hover ~ .mouse-dot {
       进入游戏倒计时结束后会自动播放背景音乐，声音可能突然响起；
       若对突发声音敏感，请提前调低设备音量后再确认。
     </div>
-    <button class="confirm-tip-btn" id="confirmTipBtn">我已知晓，确认开始</button>
+    <button class="confirm-tip-btn" id="confirmTipBtn">我已严肃知晓</button>
   </div>
 </div>
 
@@ -359,7 +359,6 @@ button:hover ~ .mouse-dot {
   <button class="start-btn-menu" id="enterGameBtn">开始挑战</button>
 </div>
 
-<!-- 结算面板：移除本局时长、历史最高DOM -->
 <div class="result-panel" id="resultPanel">
   <div class="result-box">
     <h2 class="result-title" id="resultTitle">挑战结束</h2>
@@ -383,7 +382,7 @@ button:hover ~ .mouse-dot {
 
 <div class="target-ring" id="ring"></div>
 <div class="countdown-text" id="countText"></div>
-<div class="bottom-tip" id="gameTip">圈内回血速度更快，圈外掉血；圆环随机尺寸，不会随时间缩小</div>
+<div class="bottom-tip" id="gameTip">待在圈里别动，像西游记那样</div>
 
 <script>
 // 全局常量
@@ -392,6 +391,7 @@ const CONFIG = {
   RING_MIN_SIZE: 45,
   RING_MAX_SIZE: 80,
   MAX_HP: 100,
+  MIN_HP: 0,
   HEAL_RATE: 2.2,
   DRAIN_RATE: 1.4,
   DRAIN_MUL: 2.0,
@@ -400,7 +400,9 @@ const CONFIG = {
   REFRESH_INTERVAL: 3000,
   HP_TICK_MS: 50,
   TOTAL_GAME_TIME: 60,
-  BLINK_DELAY: 120
+  BLINK_DELAY: 100,
+  HP_LERP_SPEED: 0.08,
+  EPS: 0.01 // 浮点误差容差，小于该值视为血量0
 };
 
 // 游戏状态
@@ -412,6 +414,7 @@ const state = {
   startTime: 0,
   bestScore: Number(localStorage.getItem("balanceMax")) || 0,
   hp: CONFIG.MAX_HP,
+  smoothHp: CONFIG.MAX_HP,
   remainTime: CONFIG.TOTAL_GAME_TIME,
   mouseX: window.innerWidth / 2,
   mouseY: window.innerHeight / 2,
@@ -505,7 +508,7 @@ document.addEventListener("mousemove", e => {
   }
 });
 
-// 触摸适配
+// 触摸 极简赋值
 document.addEventListener("touchmove", e => {
   e.preventDefault();
   const touch = e.touches[0];
@@ -526,7 +529,7 @@ function isInRing() {
   return dist <= r - CONFIG.DOT_RADIUS;
 }
 
-// 刷新圆环+闪烁
+// 刷新圆环位置+0.1秒闪烁
 function refreshRing() {
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -558,26 +561,45 @@ function refreshRing() {
   applyRingStyle();
 }
 
-// 血量同步更新（血条与数字1:1同步，移除过渡）
+// 血量增减：仅区间钳位，无任何结束判定
 function tickHP() {
   if (!state.playing || state.countingDown) return;
   if (isInRing()) {
     state.hp += CONFIG.HEAL_RATE;
-    state.hp = Math.min(state.hp, CONFIG.MAX_HP);
   } else {
     state.hp -= CONFIG.DRAIN_RATE * CONFIG.DRAIN_MUL;
-    if (state.hp <= 0) {
-      state.hp = 0;
-      endGame(false);
-      return;
-    }
   }
-  // 血条宽度 = 血量百分比，完全同步数字
-  el.hpBar.style.width = state.hp + "%";
-  el.bestRecord.textContent = Math.floor(state.hp);
+  // 严格锁定血量区间0~100
+  state.hp = Math.max(CONFIG.MIN_HP, Math.min(CONFIG.MAX_HP, state.hp));
 }
 
-// 游戏结束（删除时长、最高分DOM赋值）
+// 渲染循环：浮点容错判定，血量接近0自动结算
+function gameLoop() {
+  if (!state.playing) return;
+  const pass = (Date.now() - state.startTime) / 1000;
+  state.remainTime = CONFIG.TOTAL_GAME_TIME - pass;
+  el.currentTime.textContent = state.remainTime.toFixed(2);
+  // 时间耗尽 → 胜利
+  if (state.remainTime <= 0) {
+    endGame(true);
+    return;
+  }
+  // 平滑插值血量
+  state.smoothHp += (state.hp - state.smoothHp) * CONFIG.HP_LERP_SPEED;
+  state.smoothHp = Math.max(CONFIG.MIN_HP, Math.min(CONFIG.MAX_HP, state.smoothHp));
+  const displayHp = Math.floor(state.smoothHp);
+  // 血条宽度与浮点血量完全绑定同步
+  el.hpBar.style.width = state.smoothHp + "%";
+  el.bestRecord.textContent = displayHp;
+  // 修复浮点精度BUG：血量小于误差容差视为空，触发失败
+  if (state.smoothHp < CONFIG.EPS) {
+    endGame(false);
+    return;
+  }
+  state.animFrame = requestAnimationFrame(gameLoop);
+}
+
+// 游戏结束统一处理
 function endGame(isWin) {
   state.playing = false;
   cancelAnimationFrame(state.animFrame);
@@ -597,21 +619,6 @@ function endGame(isWin) {
     el.newRecordTip.style.display = "block";
   }
   el.resultPanel.classList.add("show");
-}
-
-// 渲染循环
-function gameLoop() {
-  if (!state.playing) return;
-  const pass = (Date.now() - state.startTime) / 1000;
-  state.remainTime = CONFIG.TOTAL_GAME_TIME - pass;
-  el.currentTime.textContent = state.remainTime.toFixed(2);
-  if (state.remainTime <= 0) {
-    state.remainTime = 0;
-    el.currentTime.textContent = "0.00";
-    endGame(true);
-    return;
-  }
-  state.animFrame = requestAnimationFrame(gameLoop);
 }
 
 // 321倒计时
@@ -643,12 +650,13 @@ function startCountdown(cb) {
 // 重置游戏
 function resetGame() {
   state.hp = CONFIG.MAX_HP;
+  state.smoothHp = CONFIG.MAX_HP;
   state.remainTime = CONFIG.TOTAL_GAME_TIME;
   state.firstRingSpawn = true;
   state.mouseX = state.ringX;
   state.mouseY = state.ringY;
-  el.hpBar.style.width = state.hp + "%";
-  el.bestRecord.textContent = state.hp;
+  el.hpBar.style.width = state.smoothHp + "%";
+  el.bestRecord.textContent = Math.floor(state.smoothHp);
   el.currentTime.textContent = state.remainTime.toFixed(2);
   el.dot.style.left = state.mouseX + "px";
   el.dot.style.top = state.mouseY + "px";
@@ -694,7 +702,7 @@ el.homeBtn.addEventListener("click", () => {
 
 // 初始化页面
 el.menuBest.textContent = state.bestScore.toFixed(2);
-el.bestRecord.textContent = state.hp;
+el.bestRecord.textContent = Math.floor(state.smoothHp);
 el.currentTime.textContent = state.remainTime.toFixed(2);
 applyRingStyle();
 </script>
