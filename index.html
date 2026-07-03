@@ -37,6 +37,7 @@ body {
   position: relative;
   cursor: none;
 }
+/* 全局黑暗遮罩 */
 .light-mask {
   position: fixed;
   inset: 0;
@@ -44,12 +45,15 @@ body {
   z-index: 2;
   background: radial-gradient(circle var(--light-radius) at var(--mouse-x, 50%) var(--mouse-y, 50%), transparent 0%, rgba(0,0,0,1) 100%);
 }
+/* 正常状态：仅灯光内可见 */
 .light-visible {
   mix-blend-mode: screen;
 }
+/* 刷新闪烁时：无视遮罩，全局可见 */
 .no-mask {
   mix-blend-mode: normal !important;
 }
+/* 鼠标光点发光 */
 .mouse-dot {
   position: fixed;
   width: 22px;
@@ -63,6 +67,7 @@ body {
   will-change: left, top;
   box-shadow: 0 0 12px #fff, 0 0 40px rgba(255,255,220,0.5), 0 0 80px rgba(255,255,200,0.3);
 }
+/* 倒计时遮罩：彻底透明无背景 */
 .count-flash-mask {
   position: fixed;
   inset: 0;
@@ -76,6 +81,7 @@ body {
   pointer-events: all;
   background: transparent !important;
 }
+/* 弹窗样式 */
 .audio-tip-modal {
   position: fixed;
   inset: 0;
@@ -117,6 +123,7 @@ body {
 .confirm-tip-btn:hover {
   scale: 1.05;
 }
+/* 主菜单 */
 .start-menu {
   position: fixed;
   inset: 0;
@@ -177,6 +184,7 @@ body {
 .start-btn-menu:hover {
   scale: 1.05;
 }
+/* 结算弹窗 */
 .result-panel {
   position: fixed;
   inset: 0;
@@ -231,6 +239,7 @@ body {
 .res-btn:hover {
   scale: 1.05;
 }
+/* 游戏UI */
 .game-ui-wrap {
   position: fixed;
   top: 30px;
@@ -253,6 +262,7 @@ body {
   font-weight: 500;
   text-shadow: 0 0 6px var(--text-glow), 0 0 12px var(--text-glow);
 }
+/* 血条 */
 .hp-container {
   width: 100%;
   height: 14px;
@@ -270,6 +280,7 @@ body {
   box-shadow: 0 0 4px var(--hp-glow) inset;
   transition: width 0.04s linear;
 }
+/* 判定圈 */
 .target-ring {
   position: absolute;
   border: 3px solid var(--ring-stroke);
@@ -281,6 +292,7 @@ body {
   border-color: var(--ring-bright);
   box-shadow: 0 0 12px var(--ring-bright), 0 0 24px var(--ring-bright);
 }
+/* 倒计时数字：纯白发光，无底色干扰 */
 .countdown-text {
   position: fixed;
   left: 50%;
@@ -317,8 +329,8 @@ body {
   <div class="tip-box">
     <div class="tip-title">音频提示</div>
     <div class="tip-text">
-      点击确认解锁背景音乐权限，不确认也能正常游戏，只是无BGM；
-      调低音量后再确认避免突然出声。
+      点击确认后解锁背景音乐权限，再点击「开始挑战」进入游戏；
+      若对突发声音敏感，请提前调低设备音量。
     </div>
     <button class="confirm-tip-btn" id="confirmTipBtn">我已知晓，解锁音乐</button>
   </div>
@@ -423,14 +435,17 @@ const el = {
 };
 
 let audioInst = null;
+let audioReady = false;
 function initAudio() {
   const audio = new Audio("bgm.mp3");
   audio.loop = true;
   audio.volume = 0.3;
+  audio.addEventListener("canplaythrough", () => audioReady = true);
+  audio.addEventListener("error", () => audioInst = null);
   return audio;
 }
 
-// 解锁音乐权限，不影响游戏流程
+// 修复：仅解锁音乐权限，不进入游戏
 el.confirmTipBtn.addEventListener("click", () => {
   state.audioAllowed = true;
   el.audioTipModal.style.display = "none";
@@ -492,7 +507,9 @@ function refreshRing() {
   const halfR = state.ringSize / 2;
   const minY = CONFIG.AREA_TOP_OFFSET + halfR;
   const maxY = h - halfR;
+
   state.ringSize = CONFIG.RING_MIN_SIZE + Math.random() * (CONFIG.RING_MAX_SIZE - CONFIG.RING_MIN_SIZE);
+
   if (state.firstRingSpawn) {
     state.ringX = cx;
     state.ringY = cy;
@@ -603,9 +620,19 @@ function resetGame() {
   refreshRing();
 }
 
+// 弹出音乐提示弹窗
+el.enterGameBtn.addEventListener("click", () => el.audioTipModal.style.display = "flex");
+// 重开游戏
+el.retryBtn.addEventListener("click", launchGame);
+// 返回主页
+el.homeBtn.addEventListener("click", () => {
+  resetGame();
+  if (audioInst) audioInst.pause();
+  el.menuBox.classList.remove("hidden");
+});
+
 function launchGame() {
   resetGame();
-  el.menuBox.classList.add("hidden");
   startCountdown(() => {
     state.playing = true;
     state.startTime = Date.now();
@@ -615,24 +642,7 @@ function launchGame() {
   });
 }
 
-// 核心修复：弹窗只是提示，关闭弹窗直接开局，不阻断流程
-el.enterGameBtn.addEventListener("click", () => {
-  if (state.audioAllowed) {
-    // 已解锁音乐，直接开局
-    launchGame();
-  } else {
-    // 未解锁，弹出提示，弹窗关闭后再点一次开局
-    el.audioTipModal.style.display = "flex";
-  }
-});
-
-el.retryBtn.addEventListener("click", launchGame);
-el.homeBtn.addEventListener("click", () => {
-  resetGame();
-  if (audioInst) audioInst.pause();
-  el.menuBox.classList.remove("hidden");
-});
-
+// 初始化
 el.body.style.setProperty("--mouse-x", state.mouseX + "px");
 el.body.style.setProperty("--mouse-y", state.mouseY + "px");
 el.menuBest.textContent = state.bestScore.toFixed(2);
