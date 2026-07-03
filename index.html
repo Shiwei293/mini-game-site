@@ -146,13 +146,14 @@ body {
 .result-panel {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.25);
+  background: rgba(0,0,0,0.4);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 60;
   opacity: 0;
   pointer-events: none;
+  transition: opacity 0.3s;
 }
 .result-panel.show {
   opacity: 1;
@@ -207,6 +208,7 @@ body {
   z-index: 10;
   opacity: 0;
   pointer-events: none;
+  transition: opacity 0.3s;
 }
 .game-ui-wrap.visible {
   opacity: 1;
@@ -274,6 +276,7 @@ body {
   opacity: 0;
   pointer-events: none;
   z-index: 10;
+  transition: opacity 0.3s;
 }
 .bottom-tip.visible {
   opacity: 0.6;
@@ -288,7 +291,7 @@ body {
 
 <div class="start-menu" id="menuBox">
   <h1 class="menu-title">稳态平衡挑战</h1>
-  <p class="menu-desc">通关以获取Galgame游玩权限</p>
+  <p class="menu-desc">移动鼠标灯光，只有光照范围内才能看见判定圈；圈内回血，圈外缓慢扣血</p>
   <p class="menu-record">历史最高纪录：<span id="menuBest">0.00</span> 秒</p>
   <button class="start-btn-menu" id="enterGameBtn">开始挑战</button>
 </div>
@@ -296,6 +299,7 @@ body {
 <div class="result-panel" id="resultPanel">
   <div class="result-box">
     <h2 class="result-title" id="resultTitle">挑战结束</h2>
+    <p id="newRecordTip" style="color:#22c55e;display:none;">🎉 刷新最高纪录！</p>
     <div class="result-buttons">
       <button class="res-btn retry-btn" id="retryBtn">再来一局</button>
       <button class="res-btn home-btn" id="homeBtn">返回主页</button>
@@ -315,7 +319,7 @@ body {
 
 <div class="target-ring light-visible" id="ring"></div>
 <div class="countdown-text light-visible" id="countText"></div>
-<div class="bottom-tip light-visible" id="gameTip">为了Wanfeng Galgame！</div>
+<div class="bottom-tip light-visible" id="gameTip">只有鼠标光照区域可见圆环；圈内回血，圈外缓慢扣血</div>
 
 <script>
 const CONFIG = {
@@ -474,6 +478,7 @@ function gameLoop() {
   const pass = (Date.now() - state.startTime) / 1000;
   state.remainTime = CONFIG.TOTAL_GAME_TIME - pass;
   el.currentTime.textContent = state.remainTime.toFixed(2);
+  // 时间到胜利
   if (state.remainTime <= 0) {
     endGame(true);
     return;
@@ -482,7 +487,8 @@ function gameLoop() {
   state.smoothHp = Math.max(CONFIG.MIN_HP, Math.min(CONFIG.MAX_HP, state.smoothHp));
   el.hpBar.style.width = state.smoothHp + "%";
   el.hpNum.textContent = Math.floor(state.smoothHp);
-  if (state.smoothHp < CONFIG.EPS) {
+  // 血量归零失败，强制调用结算
+  if (state.smoothHp <= CONFIG.EPS) {
     endGame(false);
     return;
   }
@@ -490,6 +496,8 @@ function gameLoop() {
 }
 
 function endGame(isWin) {
+  // 防止重复触发结算
+  if (!state.playing) return;
   state.playing = false;
   cancelAnimationFrame(state.animFrame);
   clearInterval(state.ringTimer);
@@ -497,13 +505,20 @@ function endGame(isWin) {
   if (audioInst) audioInst.pause();
   const playTime = CONFIG.TOTAL_GAME_TIME - state.remainTime;
   el.newRecordTip.style.display = "none";
-  el.resultTitle.textContent = isWin ? "挑战成功" : "挑战失败";
+  // 设置结算标题
+  if(isWin){
+    el.resultTitle.textContent = "挑战成功";
+  }else{
+    el.resultTitle.textContent = "挑战失败";
+  }
+  // 判断是否刷新最高分
   if (playTime > state.bestScore) {
     state.bestScore = playTime;
     localStorage.setItem("balanceMax", state.bestScore);
     el.menuBest.textContent = state.bestScore.toFixed(2);
     el.newRecordTip.style.display = "block";
   }
+  // 显示结算弹窗
   el.resultPanel.classList.add("show");
 }
 
