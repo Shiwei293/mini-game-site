@@ -329,10 +329,10 @@ body {
   <div class="tip-box">
     <div class="tip-title">音频提示</div>
     <div class="tip-text">
-      点击确认后将开启背景音乐，进入游戏倒计时结束自动播放；
-      若对突发声音敏感，请提前调低设备音量后再确认。
+      点击确认后解锁背景音乐权限，再点击「开始挑战」进入游戏；
+      若对突发声音敏感，请提前调低设备音量。
     </div>
-    <button class="confirm-tip-btn" id="confirmTipBtn">我已知晓，确认开启音乐</button>
+    <button class="confirm-tip-btn" id="confirmTipBtn">我已知晓，解锁音乐</button>
   </div>
 </div>
 
@@ -376,14 +376,14 @@ const CONFIG = {
   MAX_HP: 100,
   MIN_HP: 0,
   HEAL_RATE: 2.2,
-  DRAIN_RATE: 0.8, // 扣血：原版1.4 > 0.8 > 旧慢速0.4
+  DRAIN_RATE: 0.8,
   DRAIN_MUL: 1.0,
   MAX_OFFSET_FACTOR: 0.9,
   AREA_TOP_OFFSET: 180,
   REFRESH_INTERVAL: 3000,
   HP_TICK_MS: 50,
   TOTAL_GAME_TIME: 60,
-  BLINK_DELAY: 500, // 0.5秒全屏闪烁解除遮罩
+  BLINK_DELAY: 500,
   HP_LERP_SPEED: 0.08,
   EPS: 0.01
 };
@@ -407,7 +407,7 @@ const state = {
   ringTimer: null,
   hpTimer: null,
   firstRingSpawn: true,
-  audioAllowed: false // 音乐播放前置开关：仅点击确认按钮后为true
+  audioAllowed: false
 };
 
 const el = {
@@ -436,24 +436,19 @@ const el = {
 
 let audioInst = null;
 let audioReady = false;
-// 延迟初始化音频，等待用户点击确认后再创建
 function initAudio() {
   const audio = new Audio("bgm.mp3");
   audio.loop = true;
   audio.volume = 0.3;
-  audio.addEventListener("canplaythrough", () => {
-    audioReady = true;
-    audioInst = audio;
-  });
+  audio.addEventListener("canplaythrough", () => audioReady = true);
   audio.addEventListener("error", () => audioInst = null);
   return audio;
 }
 
-// 点击确认按钮：开启音乐权限（前置交互条件）
+// 修复：仅解锁音乐权限，不进入游戏
 el.confirmTipBtn.addEventListener("click", () => {
   state.audioAllowed = true;
   el.audioTipModal.style.display = "none";
-  // 初始化音频实例
   if (!audioInst) audioInst = initAudio();
 });
 
@@ -521,10 +516,7 @@ function refreshRing() {
     state.firstRingSpawn = false;
   } else {
     el.ring.classList.add("blink", "no-mask");
-    setTimeout(() => {
-      el.ring.classList.remove("blink", "no-mask");
-    }, CONFIG.BLINK_DELAY);
-
+    setTimeout(() => el.ring.classList.remove("blink", "no-mask"), CONFIG.BLINK_DELAY);
     const maxOff = w * CONFIG.MAX_OFFSET_FACTOR;
     const ox = (Math.random() * 2 - 1) * maxOff;
     const oy = (Math.random() * 2 - 1) * (h * CONFIG.MAX_OFFSET_FACTOR);
@@ -540,8 +532,7 @@ function refreshRing() {
 
 function tickHP() {
   if (!state.playing || state.countingDown) return;
-  if (isInRing()) state.hp += CONFIG.HEAL_RATE;
-  else state.hp -= CONFIG.DRAIN_RATE * CONFIG.DRAIN_MUL;
+  state.hp += isInRing() ? CONFIG.HEAL_RATE : -CONFIG.DRAIN_RATE;
   state.hp = Math.max(CONFIG.MIN_HP, Math.min(CONFIG.MAX_HP, state.hp));
 }
 
@@ -556,9 +547,8 @@ function gameLoop() {
   }
   state.smoothHp += (state.hp - state.smoothHp) * CONFIG.HP_LERP_SPEED;
   state.smoothHp = Math.max(CONFIG.MIN_HP, Math.min(CONFIG.MAX_HP, state.smoothHp));
-  const displayHp = Math.floor(state.smoothHp);
   el.hpBar.style.width = state.smoothHp + "%";
-  el.bestRecord.textContent = displayHp;
+  el.bestRecord.textContent = Math.floor(state.smoothHp);
   if (state.smoothHp < CONFIG.EPS) {
     endGame(false);
     return;
@@ -571,7 +561,6 @@ function endGame(isWin) {
   cancelAnimationFrame(state.animFrame);
   clearInterval(state.ringTimer);
   clearInterval(state.hpTimer);
-  // 游戏结束暂停音乐
   if (audioInst) audioInst.pause();
   const playTime = CONFIG.TOTAL_GAME_TIME - state.remainTime;
   el.newRecordTip.style.display = "none";
@@ -585,7 +574,6 @@ function endGame(isWin) {
   el.resultPanel.classList.add("show");
 }
 
-// 倒计时：无全屏背景，只显示发光数字3/2/1
 function startCountdown(cb) {
   state.countingDown = true;
   let cnt = 3;
@@ -593,7 +581,6 @@ function startCountdown(cb) {
   el.flashMask.style.background = "transparent";
   const timer = setInterval(() => {
     el.countText.textContent = cnt;
-    // 统一白色发光数字，无底色切换
     el.countText.style.color = "#ffffff";
     el.countText.style.textShadow = "0 0 12px rgba(255,255,255,0.9), 0 0 24px rgba(255,255,255,0.6)";
     cnt--;
@@ -601,11 +588,9 @@ function startCountdown(cb) {
       clearInterval(timer);
       el.countText.textContent = "";
       el.flashMask.classList.remove("show");
-      el.flashMask.style.background = "transparent";
       state.countingDown = false;
       el.gameUI.classList.add("visible");
       el.gameTip.classList.add("visible");
-      // 满足前置交互条件才播放音乐
       if (state.audioAllowed && audioInst) audioInst.play().catch(() => {});
       cb();
     }
@@ -635,6 +620,17 @@ function resetGame() {
   refreshRing();
 }
 
+// 弹出音乐提示弹窗
+el.enterGameBtn.addEventListener("click", () => el.audioTipModal.style.display = "flex");
+// 重开游戏
+el.retryBtn.addEventListener("click", launchGame);
+// 返回主页
+el.homeBtn.addEventListener("click", () => {
+  resetGame();
+  if (audioInst) audioInst.pause();
+  el.menuBox.classList.remove("hidden");
+});
+
 function launchGame() {
   resetGame();
   startCountdown(() => {
@@ -646,16 +642,7 @@ function launchGame() {
   });
 }
 
-// 开始游戏按钮弹出音乐确认弹窗
-el.enterGameBtn.addEventListener("click", () => el.audioTipModal.style.display = "flex");
-el.retryBtn.addEventListener("click", launchGame);
-el.homeBtn.addEventListener("click", () => {
-  resetGame();
-  if (audioInst) audioInst.pause();
-  el.menuBox.classList.remove("hidden");
-});
-
-// 页面初始化灯光位置
+// 初始化
 el.body.style.setProperty("--mouse-x", state.mouseX + "px");
 el.body.style.setProperty("--mouse-y", state.mouseY + "px");
 el.menuBest.textContent = state.bestScore.toFixed(2);
