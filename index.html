@@ -22,7 +22,6 @@
   --ripple-dark: rgba(255,255,255,0.14);
   --light-radius: 220px;
 }
-  
 * {
   margin: 0;
   padding: 0;
@@ -368,10 +367,9 @@ const CONFIG = {
   GAME_AREA_BOTTOM: window.innerHeight - 100,
   GAME_AREA_LEFT: 20,
   GAME_AREA_RIGHT: window.innerWidth - 20,
-  // 抖动幅度提升至11像素，比之前9更大，无限接近旧版12但顺滑不卡顿
   SHAKE_STIFFNESS: 0.05,
   SHAKE_DAMPING: 0.14,
-  MAX_SHAKE_RANGE: 11
+  MAX_SHAKE_RANGE: 13
 };
 
 const state = {
@@ -500,7 +498,7 @@ function tickHP() {
 
 function gameLoop() {
   if (!state.playing) return;
-  // 帧同步弹簧平滑抖动物理计算（无定时器卡顿）
+  // 帧同步弹簧平滑抖动，固定上限13像素，幅度统一无忽大忽小
   const targetShakeX = (Math.random() - 0.5) * CONFIG.MAX_SHAKE_RANGE;
   const targetShakeY = (Math.random() - 0.5) * CONFIG.MAX_SHAKE_RANGE;
   state.shakeVelX += (targetShakeX - state.shakeX) * CONFIG.SHAKE_STIFFNESS;
@@ -509,7 +507,7 @@ function gameLoop() {
   state.shakeVelY *= (1 - CONFIG.SHAKE_DAMPING);
   state.shakeX += state.shakeVelX;
   state.shakeY += state.shakeVelY;
-  // 限制最大偏移幅度
+  // 严格限制最大偏移不超过13
   const shakeDist = Math.hypot(state.shakeX, state.shakeY);
   if (shakeDist > CONFIG.MAX_SHAKE_RANGE) {
     const scale = CONFIG.MAX_SHAKE_RANGE / shakeDist;
@@ -518,7 +516,6 @@ function gameLoop() {
     state.shakeVelX *= 0.4;
     state.shakeVelY *= 0.4;
   }
-  // 渲染带平滑抖动的鼠标圆点与遮罩
   const renderX = state.mouseX + state.shakeX;
   const renderY = state.mouseY + state.shakeY;
   el.dot.style.left = renderX + "px";
@@ -526,7 +523,6 @@ function gameLoop() {
   el.body.style.setProperty("--mouse-x", renderX + "px");
   el.body.style.setProperty("--mouse-y", renderY + "px");
 
-  // 倒计时逻辑
   const pass = (Date.now() - state.startTime) / 1000;
   state.remainTime = CONFIG.TOTAL_GAME_TIME - pass;
   el.currentTime.textContent = state.remainTime.toFixed(2);
@@ -534,12 +530,10 @@ function gameLoop() {
     endGame(true);
     return;
   }
-  // 平滑血量更新
   state.smoothHp += (state.hp - state.smoothHp) * CONFIG.HP_LERP_SPEED;
   state.smoothHp = Math.max(CONFIG.MIN_HP, Math.min(CONFIG.MAX_HP, state.smoothHp));
   el.hpBar.style.width = state.smoothHp + "%";
   el.hpNum.textContent = Math.floor(state.smoothHp);
-  // 血量归零触发失败结算
   if (state.smoothHp <= CONFIG.EPS) {
     endGame(false);
     return;
@@ -603,7 +597,6 @@ function resetGame() {
   state.firstRingSpawn = true;
   state.mouseX = window.innerWidth / 2;
   state.mouseY = window.innerHeight / 2;
-  // 重置抖动物理状态，消除残留晃动
   state.shakeX = 0;
   state.shakeY = 0;
   state.shakeVelX = 0;
