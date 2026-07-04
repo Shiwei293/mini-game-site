@@ -2,7 +2,11 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="screen-orientation" content="landscape">
+<meta name="x5-orientation" content="landscape">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>稳态平衡挑战</title>
 <style>
 :root {
@@ -26,18 +30,93 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: system-ui, -apple-system;
-  transition: var(--trans);
+  font-family: system-ui, -apple-system, sans-serif;
+  transition: all 0.3s ease;
 }
-body {
+html, body {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
   background: var(--bg);
   color: var(--text);
-  min-height: 100vh;
-  overflow: hidden;
-  position: relative;
+  position: fixed;
+}
+body {
   cursor: none;
   user-select: none;
   -webkit-user-select: none;
+}
+/* 移动端左上角悬浮暂停按钮，电脑端隐藏 */
+.mobile-pause-btn {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.22);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: #fff;
+  font-size: 16px;
+  z-index: 12;
+  display: none;
+  pointer-events: auto;
+}
+.mobile-pause-btn.show {
+  display: block;
+}
+.mobile-pause-btn:active {
+  background: rgba(255,255,255,0.4);
+  transform: scale(0.92);
+}
+/* 竖屏旋转提示遮罩 */
+.rotate-tip-panel {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 30px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+.rotate-tip-panel.show {
+  opacity: 1;
+  pointer-events: all;
+}
+.rotate-icon {
+  width: 120px;
+  height: 120px;
+  border: 4px solid #fff;
+  border-radius: 16px;
+  position: relative;
+  animation: rotateAnim 2s linear infinite;
+}
+.rotate-icon::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 30px;
+  height: 30px;
+  border-top: 4px solid #fff;
+  border-right: 4px solid #fff;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+@keyframes rotateAnim {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.rotate-text {
+  font-size: 24px;
+  color: #fff;
+  text-align: center;
+  line-height: 1.6;
 }
 .light-mask {
   position: fixed;
@@ -79,7 +158,6 @@ body {
 .count-flash-mask.show {
   opacity: 1;
   pointer-events: all;
-  background: transparent !important;
 }
 /* 暂停弹窗 */
 .pause-panel {
@@ -136,7 +214,7 @@ body {
   color: #fff;
 }
 .pause-btn:hover {
-  scale: 1.05;
+  transform: scale(1.05);
 }
 /* 重置确认弹窗 */
 .reset-confirm-panel {
@@ -195,7 +273,7 @@ body {
   color: #eee;
 }
 .reset-confirm-btn:hover {
-  scale: 1.05;
+  transform: scale(1.05);
 }
 /* 角落快捷键提示 */
 .tip-key-left {
@@ -300,7 +378,7 @@ body {
   display: none;
 }
 .menu-btn:hover {
-  scale: 1.05;
+  transform: scale(1.05);
 }
 .result-panel {
   position: fixed;
@@ -359,7 +437,7 @@ body {
   color: var(--text);
 }
 .res-btn:hover {
-  scale: 1.05;
+  transform: scale(1.05);
 }
 .game-ui-wrap {
   position: fixed;
@@ -486,6 +564,15 @@ body {
 </style>
 </head>
 <body>
+<!-- 移动端左上角悬浮暂停按钮 -->
+<button class="mobile-pause-btn" id="mobilePauseBtn">暂停</button>
+
+<!-- 竖屏旋转提示遮罩 -->
+<div class="rotate-tip-panel" id="rotateTipPanel">
+  <div class="rotate-icon"></div>
+  <div class="rotate-text">请将设备横向旋转<br>横置后即可正常游玩</div>
+</div>
+
 <div class="count-flash-mask" id="flashMask"></div>
 <div class="mouse-dot" id="dot"></div>
 <div class="light-mask" id="maskBg"></div>
@@ -513,7 +600,7 @@ body {
     <div class="pause-btn-group">
       <button class="pause-btn pause-continue" id="pauseContinue">继续游戏</button>
       <button class="pause-btn pause-restart" id="pauseRestart">重新开始</button>
-      <button class="pause-btn pause-home" id="pauseHome">返回大厅</button>
+      <button class="pause-btn pauseHome" id="pauseHome">返回大厅</button>
     </div>
   </div>
 </div>
@@ -660,10 +747,12 @@ const el = {
   pauseHome: document.getElementById("pauseHome"),
   tipLeft: document.getElementById("tipLeft"),
   tipRight: document.getElementById("tipRight"),
-  // 重置确认弹窗
   resetConfirmPanel: document.getElementById("resetConfirmPanel"),
   confirmResetBtn: document.getElementById("confirmResetBtn"),
-  refuseResetBtn: document.getElementById("refuseResetBtn")
+  refuseResetBtn: document.getElementById("refuseResetBtn"),
+  rotateTipPanel: document.getElementById("rotateTipPanel"),
+  // 移动端暂停按钮
+  mobilePauseBtn: document.getElementById("mobilePauseBtn")
 };
 
 let audioInst = null;
@@ -707,6 +796,8 @@ function applyRingStyle() {
 function setMousePos(x, y) {
   state.mouseX = x;
   state.mouseY = y;
+  document.documentElement.style.setProperty("--mouse-x", x + "px");
+  document.documentElement.style.setProperty("--mouse-y", y + "px");
 }
 document.addEventListener("mousemove", e => setMousePos(e.clientX, e.clientY));
 document.addEventListener("touchmove", e => {
@@ -761,7 +852,7 @@ function tickHP() {
 }
 
 function setMaskEffect() {
-  el.body.style.setProperty("--light-radius", state.maskRadius + "px");
+  document.documentElement.style.setProperty("--light-radius", state.maskRadius + "px");
   if (saveData.currentRound >= 4) {
     el.maskBg.classList.add("hide");
   } else {
@@ -809,6 +900,35 @@ function restartCurrentRound() {
   launchGame(saveData.currentRound, state.isAdvanceRun);
 }
 
+// 全屏+锁定横屏（用户点击触发）
+function lockLandscape() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(e=>{});
+  }
+  if (screen.orientation && screen.orientation.lock) {
+    screen.orientation.lock("landscape").catch(e=>{});
+  }
+}
+
+// 判断是否竖屏
+function isPortrait() {
+  return window.innerHeight > window.innerWidth;
+}
+// 更新旋转提示、移动端暂停按钮显示
+function updateRotateTip() {
+  const isPort = isPortrait();
+  if (isPort) {
+    el.rotateTipPanel.classList.add("show");
+    el.mobilePauseBtn.classList.remove("show");
+  } else {
+    el.rotateTipPanel.classList.remove("show");
+    // 触屏设备才显示暂停按钮
+    if ("ontouchstart" in window) {
+      el.mobilePauseBtn.classList.add("show");
+    }
+  }
+}
+
 function gameLoop() {
   if (!state.playing || !state.pageVisible || state.isPaused) {
     state.animFrame = requestAnimationFrame(gameLoop);
@@ -836,8 +956,6 @@ function gameLoop() {
 
   el.dot.style.left = state.lightDotX + "px";
   el.dot.style.top = state.lightDotY + "px";
-  el.body.style.setProperty("--mouse-x", state.lightDotX + "px");
-  el.body.style.setProperty("--mouse-y", state.lightDotY + "px");
 
   const pass = (Date.now() - state.startTime) / 1000;
   state.remainTime = BASE_CONFIG.TOTAL_GAME_TIME - pass;
@@ -973,8 +1091,6 @@ function resetGame() {
   el.currentTime.textContent = state.remainTime.toFixed(2);
   el.dot.style.left = state.lightDotX + "px";
   el.dot.style.top = state.lightDotY + "px";
-  el.body.style.setProperty("--mouse-x", state.lightDotX + "px");
-  el.body.style.setProperty("--mouse-y", state.lightDotY + "px");
 
   el.resultPanel.classList.remove("show");
   el.pausePanel.classList.remove("show");
@@ -988,6 +1104,7 @@ function resetGame() {
 
 function launchGame(targetRound, isAdvance) {
   resetGame();
+  lockLandscape();
   initAudio();
   const diff = calcDifficulty(targetRound);
   state.refreshSec = diff.refresh;
@@ -1012,6 +1129,9 @@ document.addEventListener("keydown", e => {
   if (e.key === " " && state.isPaused) togglePause();
   if ((e.key === "r" || e.key === "R") && state.playing && !state.countingDown) restartCurrentRound();
 });
+
+// 移动端暂停按钮点击
+el.mobilePauseBtn.addEventListener("click", togglePause);
 
 // 暂停按钮
 el.pauseContinue.addEventListener("click", togglePause);
@@ -1052,17 +1172,20 @@ el.homeBtn.addEventListener("click", () => {
 
 document.addEventListener("visibilitychange", () => {
   state.pageVisible = !document.hidden;
-  if (!state.pageVisible && state.playing && !state.isPaused) togglePause();
+  if (!document.hidden) return;
+  if (state.playing && !state.isPaused) togglePause();
 });
 
 window.addEventListener("resize", () => {
   winW = window.innerWidth;
   winH = window.innerHeight;
+  updateRotateTip();
 });
+window.addEventListener("orientationchange", updateRotateTip);
 
 updateMenuUI();
-el.body.style.setProperty("--mouse-x", state.mouseX + "px");
-el.body.style.setProperty("--mouse-y", state.mouseY + "px");
+updateRotateTip();
+setMousePos(winW / 2, winH / 2);
 applyRingStyle();
 state.animFrame = requestAnimationFrame(gameLoop);
 </script>
