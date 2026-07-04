@@ -138,6 +138,30 @@ body {
 .pause-btn:hover {
   scale: 1.05;
 }
+/* 角落快捷键提示 */
+.tip-key-left {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  font-size: 16px;
+  color: rgba(255,255,255,0.45);
+  z-index: 8;
+  pointer-events: none;
+  transition: opacity 0.8s ease;
+}
+.tip-key-right {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  font-size: 16px;
+  color: rgba(255,255,255,0.45);
+  z-index: 8;
+  pointer-events: none;
+  transition: opacity 0.8s ease;
+}
+.tip-fadeout {
+  opacity: 0;
+}
 .start-menu {
   position: fixed;
   inset: 0;
@@ -333,11 +357,12 @@ body {
   from {opacity:0.7;}
   to {opacity:1;}
 }
+/* 判定圈柔和淡入淡出过渡 */
 .target-ring {
   position: fixed;
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  transition: width 0.15s linear, height 0.15s linear;
+  transition: width 0.15s linear, height 0.15s linear, opacity 0.3s ease;
   z-index: 1;
   animation: ringGlowSpin 2.5s linear infinite;
   border: 3px solid transparent;
@@ -350,16 +375,18 @@ body {
     0 0 16px rgba(255,255,255,0.3),
     0 0 24px rgba(255,255,255,0.15),
     inset 0 0 12px rgba(255,255,255,0.3);
+  opacity: 1;
 }
 .target-ring.blink {
+  opacity: 0.6;
   border-top-color: #ffffff;
   border-right-color: #ffffff;
   border-bottom-color: #ffffff;
   box-shadow:
     0 0 10px #ffffff,
-    0 0 20px rgba(255,255,255,0.6),
-    0 0 30px rgba(255,255,255,0.4),
-    inset 0 0 15px rgba(255,255,255,0.4);
+    0 0 20px rgba(255,255,255,0.4),
+    0 0 30px rgba(255,255,255,0.25),
+    inset 0 0 15px rgba(255,255,255,0.3);
 }
 @keyframes ringGlowSpin {
   0% {
@@ -403,6 +430,10 @@ body {
 <div class="count-flash-mask" id="flashMask"></div>
 <div class="mouse-dot" id="dot"></div>
 <div class="light-mask" id="maskBg"></div>
+
+<!-- 快捷键角落提示 -->
+<div class="tip-key-left" id="tipLeft">ESC 暂停游戏</div>
+<div class="tip-key-right" id="tipRight">R快速重开，ESC/空格取消暂停</div>
 
 <!-- 暂停弹窗 -->
 <div class="pause-panel" id="pausePanel">
@@ -500,9 +531,9 @@ let saveData = JSON.parse(localStorage.getItem("balanceSave")) || {
 const state = {
   playing: false,
   countingDown: false,
-  isPaused: false, // 暂停标记
+  isPaused: false,
   startTime: 0,
-  pauseTimeOffset: 0, // 暂停时长补偿时间
+  pauseTimeOffset: 0,
   remainTime: BASE_CONFIG.TOTAL_GAME_TIME,
   mouseX: winW / 2,
   mouseY: winH / 2,
@@ -552,11 +583,13 @@ const el = {
   currentTime: document.getElementById("currentTime"),
   resultTitle: document.getElementById("resultTitle"),
   resultSub: document.getElementById("resultSub"),
-  // 暂停DOM
   pausePanel: document.getElementById("pausePanel"),
   pauseContinue: document.getElementById("pauseContinue"),
   pauseRestart: document.getElementById("pauseRestart"),
-  pauseHome: document.getElementById("pauseHome")
+  pauseHome: document.getElementById("pauseHome"),
+  // 快捷键提示
+  tipLeft: document.getElementById("tipLeft"),
+  tipRight: document.getElementById("tipRight")
 };
 
 let audioInst = null;
@@ -681,22 +714,25 @@ function calcDifficulty(round) {
 
 // 暂停/恢复
 function togglePause() {
-  // 不可暂停状态：未开局、倒计时中、结算弹窗打开
   if (!state.playing || state.countingDown || el.resultPanel.classList.contains("show")) return;
   if (state.isPaused) {
-    // 恢复游戏
     state.isPaused = false;
     const pauseDuration = (Date.now() - state.pauseTimeOffset) / 1000;
     state.startTime += pauseDuration * 1000;
     el.pausePanel.classList.remove("show");
     if (audioInst) audioInst.play().catch(()=>{});
   } else {
-    // 暂停游戏
     state.isPaused = true;
     state.pauseTimeOffset = Date.now();
     el.pausePanel.classList.add("show");
     if (audioInst) audioInst.pause();
   }
+}
+
+// R键重开当前轮
+function restartCurrentRound() {
+  if (!state.playing || state.countingDown) return;
+  launchGame(saveData.currentRound, state.isAdvanceRun);
 }
 
 function gameLoop() {
@@ -732,6 +768,12 @@ function gameLoop() {
   const pass = (Date.now() - state.startTime) / 1000;
   state.remainTime = BASE_CONFIG.TOTAL_GAME_TIME - pass;
   el.currentTime.textContent = state.remainTime.toFixed(2);
+
+  // 快捷键提示自动淡出
+  if (pass > state.tipShowTime + BASE_CONFIG.TIP_DISPLAY_SEC) {
+    el.tipLeft.classList.add("tip-fadeout");
+    el.tipRight.classList.add("tip-fadeout");
+  }
 
   if (pass > state.tipShowTime + BASE_CONFIG.TIP_DISPLAY_SEC) {
     el.gameTip.classList.add("fadeout");
@@ -818,6 +860,9 @@ function startCountdown(cb) {
       state.countingDown = false;
       el.gameUI.classList.add("visible");
       el.gameTip.classList.add("show");
+      // 重置快捷键提示透明度
+      el.tipLeft.classList.remove("tip-fadeout");
+      el.tipRight.classList.remove("tip-fadeout");
       state.tipShowTime = (Date.now() - state.startTime) / 1000;
       setMaskEffect();
       if (audioInst) {
@@ -863,6 +908,8 @@ function resetGame() {
   el.pausePanel.classList.remove("show");
   el.gameUI.classList.remove("visible");
   el.gameTip.classList.remove("show", "fadeout");
+  el.tipLeft.classList.remove("tip-fadeout");
+  el.tipRight.classList.remove("tip-fadeout");
   el.maskBg.classList.remove("hide");
   refreshRing();
 }
@@ -887,12 +934,23 @@ function launchGame(targetRound, isAdvance) {
   });
 }
 
-// 键盘ESC暂停
+// 键盘全局监听
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") togglePause();
+  // ESC 暂停/恢复
+  if (e.key === "Escape") {
+    togglePause();
+  }
+  // 空格仅恢复暂停
+  if (e.key === " " && state.isPaused) {
+    togglePause();
+  }
+  // R 重开当前轮
+  if ((e.key === "r" || e.key === "R") && state.playing && !state.countingDown) {
+    restartCurrentRound();
+  }
 });
 
-// 暂停按钮事件
+// 暂停按钮
 el.pauseContinue.addEventListener("click", togglePause);
 el.pauseRestart.addEventListener("click", () => {
   launchGame(saveData.currentRound, state.isAdvanceRun);
@@ -928,9 +986,8 @@ el.homeBtn.addEventListener("click", () => {
 
 document.addEventListener("visibilitychange", () => {
   state.pageVisible = !document.hidden;
-  if (!state.pageVisible && state.playing && !state.isPaused) {
-    togglePause();
-  }
+  if (!document.hidden) return;
+  if (state.playing && !state.isPaused) togglePause();
 });
 
 window.addEventListener("resize", () => {
@@ -940,7 +997,7 @@ window.addEventListener("resize", () => {
 
 updateMenuUI();
 el.body.style.setProperty("--mouse-x", state.mouseX + "px");
-el.body.style.setProperty("--mouse-y", state.mouseY + "px");
+el.body.style.setProperty("--mouse-y", state.lightDotY + "px");
 applyRingStyle();
 state.animFrame = requestAnimationFrame(gameLoop);
 </script>
