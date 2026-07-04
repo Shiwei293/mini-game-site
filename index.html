@@ -138,6 +138,65 @@ body {
 .pause-btn:hover {
   scale: 1.05;
 }
+/* 重置确认弹窗 */
+.reset-confirm-panel {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 65;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.reset-confirm-panel.show {
+  opacity: 1;
+  pointer-events: all;
+}
+.reset-confirm-box {
+  background: var(--card-bg);
+  padding: 40px 50px;
+  border-radius: 18px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.reset-confirm-title {
+  font-size: 36px;
+  font-weight: 600;
+  color: #ff6666;
+}
+.reset-confirm-desc {
+  font-size: 19px;
+  color: #ccc;
+}
+.reset-confirm-buttons {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+}
+.reset-confirm-btn {
+  padding: 12px 34px;
+  font-size: 20px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+}
+.confirm-reset {
+  background: #dd3333;
+  color: white;
+}
+.refuse-reset {
+  background: transparent;
+  border: 2px solid #aaa;
+  color: #eee;
+}
+.reset-confirm-btn:hover {
+  scale: 1.05;
+}
 /* 角落快捷键提示 */
 .tip-key-left {
   position: fixed;
@@ -435,6 +494,18 @@ body {
 <div class="tip-key-left" id="tipLeft">ESC 暂停游戏</div>
 <div class="tip-key-right" id="tipRight">R快速重开，ESC/空格取消暂停</div>
 
+<!-- 重置确认弹窗 -->
+<div class="reset-confirm-panel" id="resetConfirmPanel">
+  <div class="reset-confirm-box">
+    <h2 class="reset-confirm-title">确认重置进度？</h2>
+    <p class="reset-confirm-desc">重置后所有轮次难度将清空，回到第1轮初始难度，此操作不可撤销</p>
+    <div class="reset-confirm-buttons">
+      <button class="reset-confirm-btn refuse-reset" id="refuseResetBtn">拒绝</button>
+      <button class="reset-confirm-btn confirm-reset" id="confirmResetBtn">确认</button>
+    </div>
+  </div>
+</div>
+
 <!-- 暂停弹窗 -->
 <div class="pause-panel" id="pausePanel">
   <div class="pause-box">
@@ -587,9 +658,12 @@ const el = {
   pauseContinue: document.getElementById("pauseContinue"),
   pauseRestart: document.getElementById("pauseRestart"),
   pauseHome: document.getElementById("pauseHome"),
-  // 快捷键提示
   tipLeft: document.getElementById("tipLeft"),
-  tipRight: document.getElementById("tipRight")
+  tipRight: document.getElementById("tipRight"),
+  // 重置确认弹窗
+  resetConfirmPanel: document.getElementById("resetConfirmPanel"),
+  confirmResetBtn: document.getElementById("confirmResetBtn"),
+  refuseResetBtn: document.getElementById("refuseResetBtn")
 };
 
 let audioInst = null;
@@ -743,7 +817,7 @@ function gameLoop() {
   const targetShakeX = (Math.random() - 0.5) * state.shakeRange;
   const targetShakeY = (Math.random() - 0.5) * state.shakeRange;
   state.shakeVelX += (targetShakeX - state.shakeX) * BASE_CONFIG.SHAKE_STIFFNESS;
-  state.shakeVelY += (targetShakeY - state.shakeY) * BASE_CONFIG.SHAKE_STIFFNESS;
+  state.shakeVelY += (targetShakeY - state.shakeY) * BASE_CONFIG.SHAKE_DAMPING;
   state.shakeVelX *= (1 - BASE_CONFIG.SHAKE_DAMPING);
   state.shakeVelY *= (1 - BASE_CONFIG.SHAKE_DAMPING);
   state.shakeX += state.shakeVelX;
@@ -769,7 +843,6 @@ function gameLoop() {
   state.remainTime = BASE_CONFIG.TOTAL_GAME_TIME - pass;
   el.currentTime.textContent = state.remainTime.toFixed(2);
 
-  // 快捷键提示自动淡出
   if (pass > state.tipShowTime + BASE_CONFIG.TIP_DISPLAY_SEC) {
     el.tipLeft.classList.add("tip-fadeout");
     el.tipRight.classList.add("tip-fadeout");
@@ -860,7 +933,6 @@ function startCountdown(cb) {
       state.countingDown = false;
       el.gameUI.classList.add("visible");
       el.gameTip.classList.add("show");
-      // 重置快捷键提示透明度
       el.tipLeft.classList.remove("tip-fadeout");
       el.tipRight.classList.remove("tip-fadeout");
       state.tipShowTime = (Date.now() - state.startTime) / 1000;
@@ -936,28 +1008,31 @@ function launchGame(targetRound, isAdvance) {
 
 // 键盘全局监听
 document.addEventListener("keydown", e => {
-  // ESC 暂停/恢复
-  if (e.key === "Escape") {
-    togglePause();
-  }
-  // 空格仅恢复暂停
-  if (e.key === " " && state.isPaused) {
-    togglePause();
-  }
-  // R 重开当前轮
-  if ((e.key === "r" || e.key === "R") && state.playing && !state.countingDown) {
-    restartCurrentRound();
-  }
+  if (e.key === "Escape") togglePause();
+  if (e.key === " " && state.isPaused) togglePause();
+  if ((e.key === "r" || e.key === "R") && state.playing && !state.countingDown) restartCurrentRound();
 });
 
 // 暂停按钮
 el.pauseContinue.addEventListener("click", togglePause);
-el.pauseRestart.addEventListener("click", () => {
-  launchGame(saveData.currentRound, state.isAdvanceRun);
-});
+el.pauseRestart.addEventListener("click", () => launchGame(saveData.currentRound, state.isAdvanceRun));
 el.pauseHome.addEventListener("click", () => {
   resetGame();
   el.menuBox.classList.remove("hidden");
+});
+
+// 重置进度弹窗按钮
+el.resetBtn.addEventListener("click", () => {
+  el.resetConfirmPanel.classList.add("show");
+});
+el.refuseResetBtn.addEventListener("click", () => {
+  el.resetConfirmPanel.classList.remove("show");
+});
+el.confirmResetBtn.addEventListener("click", () => {
+  saveData = { bestScore: saveData.bestScore, currentRound: 1, unlockedAdvance: false };
+  saveProgress();
+  el.resetConfirmPanel.classList.remove("show");
+  updateMenuUI();
 });
 
 // 菜单按钮
@@ -966,18 +1041,9 @@ el.enterGameBtn.addEventListener("click", () => {
   saveProgress();
   launchGame(1, false);
 });
-el.continueBtn.addEventListener("click", () => {
-  launchGame(saveData.currentRound, true);
-});
-el.resetBtn.addEventListener("click", () => {
-  saveData = { bestScore: saveData.bestScore, currentRound: 1, unlockedAdvance: false };
-  saveProgress();
-  updateMenuUI();
-});
+el.continueBtn.addEventListener("click", () => launchGame(saveData.currentRound, true));
 // 结算主按钮
-el.primaryBtn.addEventListener("click", () => {
-  launchGame(saveData.currentRound, state.isAdvanceRun);
-});
+el.primaryBtn.addEventListener("click", () => launchGame(saveData.currentRound, state.isAdvanceRun));
 el.homeBtn.addEventListener("click", () => {
   resetGame();
   if (audioInst) audioInst.pause();
@@ -986,8 +1052,7 @@ el.homeBtn.addEventListener("click", () => {
 
 document.addEventListener("visibilitychange", () => {
   state.pageVisible = !document.hidden;
-  if (!document.hidden) return;
-  if (state.playing && !state.isPaused) togglePause();
+  if (!state.pageVisible && state.playing && !state.isPaused) togglePause();
 });
 
 window.addEventListener("resize", () => {
@@ -997,7 +1062,7 @@ window.addEventListener("resize", () => {
 
 updateMenuUI();
 el.body.style.setProperty("--mouse-x", state.mouseX + "px");
-el.body.style.setProperty("--mouse-y", state.lightDotY + "px");
+el.body.style.setProperty("--mouse-y", state.mouseY + "px");
 applyRingStyle();
 state.animFrame = requestAnimationFrame(gameLoop);
 </script>
