@@ -3,19 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>RFFの小游戏</title>
+<title>稳态平衡挑战</title>
 <style>
 :root {
   --bg: #0c0c0c;
   --card-bg: #171717;
   --text: #f1f1f1;
-  --text-glow: rgba(0,0,0,0.75);
+  --text-glow: rgba(0,0,0,0.4);
   --border: #333;
   --ring-stroke: #fff;
   --ring-bright: #fff;
   --dot-color: #fff;
-  --hp-empty: #333;
-  --hp-full: #fff;
+  --hp-empty: #222;
+  --hp-normal: #eee;
+  --hp-danger: #ff4444;
   --hp-glow: rgba(0,0,0,0.6);
   --shadow: 0 10px 32px rgba(0,0,0,0.35);
   --ripple-dark: rgba(255,255,255,0.14);
@@ -35,6 +36,8 @@ body {
   overflow: hidden;
   position: relative;
   cursor: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .light-mask {
   position: fixed;
@@ -42,6 +45,9 @@ body {
   pointer-events: none;
   z-index: 2;
   background: radial-gradient(circle var(--light-radius) at var(--mouse-x, 50%) var(--mouse-y, 50%), transparent 0%, rgba(0,0,0,1) 100%);
+}
+.light-mask.hide {
+  display: none;
 }
 .light-visible {
   mix-blend-mode: screen;
@@ -60,7 +66,7 @@ body {
   z-index: 9999;
   transition: none;
   will-change: left, top;
-  box-shadow: 0 0 12px #fff, 0 0 40px rgba(255,255,220,0.5), 0 0 80px rgba(255,255,200,0.3);
+  box-shadow: 0 0 12px #fff, 0 0 30px rgba(255,255,220,0.4), 0 0 60px rgba(255,255,200,0.2);
 }
 .count-flash-mask {
   position: fixed;
@@ -83,7 +89,7 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 32px;
+  gap: 16px;
   z-index: 50;
   overflow: hidden;
 }
@@ -122,17 +128,38 @@ body {
 .menu-record {
   font-size: 24px;
 }
-.start-btn-menu {
-  padding: 18px 56px;
-  font-size: 26px;
+.menu-round {
+  font-size: 22px;
+  color: #aaa;
+}
+.btn-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+}
+.menu-btn {
+  padding: 16px 52px;
+  font-size: 24px;
   border-radius: 999px;
   border: none;
+  cursor: pointer;
+}
+.start-btn {
   background: var(--text);
   color: var(--bg);
-  cursor: pointer;
-  margin-top: 16px;
 }
-.start-btn-menu:hover {
+.continue-btn {
+  background: #2277dd;
+  color: #fff;
+  display: none;
+}
+.reset-btn {
+  background: #dd3333;
+  color: #fff;
+  display: none;
+}
+.menu-btn:hover {
   scale: 1.05;
 }
 .result-panel {
@@ -165,6 +192,10 @@ body {
   font-size: 40px;
   font-weight: 600;
 }
+.result-sub {
+  font-size: 20px;
+  color: #bbb;
+}
 .result-buttons {
   display: flex;
   gap: 20px;
@@ -178,7 +209,7 @@ body {
   border: none;
   cursor: pointer;
 }
-.retry-btn {
+.primary-btn {
   background: var(--text);
   color: var(--bg);
 }
@@ -213,7 +244,7 @@ body {
   margin-bottom: 16px;
   font-size: 36px;
   font-weight: 500;
-  text-shadow: 0 0 6px var(--text-glow), 0 0 12px var(--text-glow);
+  text-shadow: 0 0 4px var(--text-glow), 0 0 8px var(--text-glow);
 }
 .time-text {
   text-align: center;
@@ -232,10 +263,18 @@ body {
 .hp-fill {
   height: 100%;
   width: 100%;
-  background: var(--hp-full);
   border-radius: 999px;
   box-shadow: 0 0 4px var(--hp-glow) inset;
-  transition: width 0.04s linear;
+  transition: width 0.04s linear, background 0.2s;
+  background: var(--hp-normal);
+}
+.hp-fill.danger {
+  background: var(--hp-danger);
+  animation: hpFlash 0.6s infinite alternate;
+}
+@keyframes hpFlash {
+  from {opacity:0.7;}
+  to {opacity:1;}
 }
 .target-ring {
   position: fixed;
@@ -250,20 +289,20 @@ body {
   border-bottom-color: rgba(255,255,255,0.3);
   border-left-color: transparent;
   box-shadow:
-    0 0 8px rgba(255,255,255,0.8),
-    0 0 16px rgba(255,255,255,0.5),
-    0 0 24px rgba(255,255,255,0.3),
-    inset 0 0 12px rgba(255,255,255,0.4);
+    0 0 8px rgba(255,255,255,0.6),
+    0 0 16px rgba(255,255,255,0.3),
+    0 0 24px rgba(255,255,255,0.15),
+    inset 0 0 12px rgba(255,255,255,0.3);
 }
 .target-ring.blink {
   border-top-color: #ffffff;
   border-right-color: #ffffff;
   border-bottom-color: #ffffff;
   box-shadow:
-    0 0 12px #ffffff,
-    0 0 24px rgba(255,255,255,0.8),
-    0 0 36px rgba(255,255,255,0.6),
-    inset 0 0 18px rgba(255,255,255,0.5);
+    0 0 10px #ffffff,
+    0 0 20px rgba(255,255,255,0.6),
+    0 0 30px rgba(255,255,255,0.4),
+    inset 0 0 15px rgba(255,255,255,0.4);
 }
 @keyframes ringGlowSpin {
   0% {
@@ -293,33 +332,41 @@ body {
   opacity: 0;
   pointer-events: none;
   z-index: 10;
-  transition: opacity 0.3s;
+  transition: opacity 0.8s;
 }
-.bottom-tip.visible {
+.bottom-tip.show {
   opacity: 0.6;
-  pointer-events: all;
+}
+.bottom-tip.fadeout {
+  opacity: 0;
 }
 </style>
 </head>
 <body>
 <div class="count-flash-mask" id="flashMask"></div>
 <div class="mouse-dot" id="dot"></div>
-<div class="light-mask"></div>
+<div class="light-mask" id="maskBg"></div>
 
 <div class="start-menu" id="menuBox">
   <h1 class="menu-title">稳态平衡挑战</h1>
-  <p class="menu-desc">移动鼠标灯光，只有光照范围内才能看见判定圈；圈内回血，圈外缓慢扣血</p>
+  <p class="menu-desc">移动鼠标灯光，圈内回血，圈外扣血；累计停留圈内自动刷新判定圈</p>
   <p class="menu-record">历史最高纪录：<span id="menuBest">0.00</span> 秒</p>
-  <button class="start-btn-menu" id="enterGameBtn">开始挑战</button>
+  <p class="menu-round" id="roundText">当前轮次：第1轮</p>
+  <div class="btn-group">
+    <button class="menu-btn start-btn" id="enterGameBtn">开始游戏（第1轮）</button>
+    <button class="menu-btn continue-btn" id="continueBtn">继续进度（下一轮）</button>
+    <button class="menu-btn reset-btn" id="resetBtn">重置全部进度</button>
+  </div>
 </div>
 
 <div class="result-panel" id="resultPanel">
   <div class="result-box">
     <h2 class="result-title" id="resultTitle">挑战结束</h2>
+    <p class="result-sub" id="resultSub"></p>
     <p id="newRecordTip" style="color:#22c55e;display:none;">🎉 刷新最高纪录！</p>
     <div class="result-buttons">
-      <button class="res-btn retry-btn" id="retryBtn">再来一局</button>
-      <button class="res-btn home-btn" id="homeBtn">返回主页</button>
+      <button class="res-btn primary-btn" id="primaryBtn">再来一局</button>
+      <button class="res-btn home-btn" id="homeBtn">返回大厅</button>
     </div>
   </div>
 </div>
@@ -330,9 +377,7 @@ body {
 
 <div class="game-ui-wrap light-visible" id="gameUI">
   <div class="info-row">
-    <!-- 时间单独居中 -->
     <div class="time-text">剩余时间：<span id="currentTime">105.00</span>s</div>
-    <!-- 只保留血条，删掉血量数字 -->
     <div class="hp-row">
       <div class="hp-container">
         <div class="hp-fill" id="hpBar"></div>
@@ -342,43 +387,57 @@ body {
 </div>
 
 <script>
-const CONFIG = {
+const BASE_CONFIG = {
   DOT_RADIUS: 11,
   RING_START_SIZE: 60,
   RING_MIN_SIZE: 28,
-  RING_SHRINK_SPEED: 0.07,
-  REFRESH_SECONDS: 2,
-  MAX_HP: 100,
-  MIN_HP: 0,
-  HEAL_RATE: 2.2,
-  DRAIN_RATE: 0.8,
-  HP_TICK_MS: 50,
   TOTAL_GAME_TIME: 105,
   BLINK_DELAY: 500,
   HP_LERP_SPEED: 0.08,
   EPS: 0.01,
-  GAME_AREA_TOP: 140,
-  GAME_AREA_BOTTOM: window.innerHeight - 100,
-  GAME_AREA_LEFT: 20,
-  GAME_AREA_RIGHT: window.innerWidth - 20,
+  HP_WARN_THRESHOLD: 25,
+  HP_TICK_MS: 50,
+  HEAL_RATE: 2.2,
+  TIP_DISPLAY_SEC: 4,
+  FRAME_RATE: 60,
   SHAKE_STIFFNESS: 0.08,
   SHAKE_DAMPING: 0.14,
-  MAX_SHAKE_RANGE: 13
+  GAME_AREA_TOP: 120,
+  GAME_AREA_LEFT: 30,
+  MAX_HP: 100,
+  MIN_HP: 0,
+  BASE_REFRESH_SEC: 2,
+  MIN_REFRESH_SEC: 0.8,
+  BASE_DRAIN: 0.8,
+  MAX_DRAIN: 2.2,
+  BASE_SHRINK: 0.07,
+  MAX_SHRINK: 0.18,
+  BASE_SHAKE_RANGE: 13,
+  MAX_SHAKE_RANGE: 28,
+  MASK_RADIUS_STAGE1: 220,
+  MASK_RADIUS_STAGE2: 450,
+  MASK_RADIUS_STAGE3: 700
+};
+
+let winW = window.innerWidth;
+let winH = window.innerHeight;
+
+let saveData = JSON.parse(localStorage.getItem("balanceSave")) || {
+  bestScore: 0,
+  currentRound: 1,
+  unlockedAdvance: false
 };
 
 const state = {
   playing: false,
   countingDown: false,
   startTime: 0,
-  bestScore: Number(localStorage.getItem("balanceMax")) || 0,
-  hp: CONFIG.MAX_HP,
-  smoothHp: CONFIG.MAX_HP,
-  remainTime: CONFIG.TOTAL_GAME_TIME,
-  mouseX: window.innerWidth / 2,
-  mouseY: window.innerHeight / 2,
-  ringX: window.innerWidth / 2,
-  ringY: window.innerHeight / 2,
-  ringSize: CONFIG.RING_START_SIZE,
+  remainTime: BASE_CONFIG.TOTAL_GAME_TIME,
+  mouseX: winW / 2,
+  mouseY: winH / 2,
+  ringX: winW / 2,
+  ringY: winH / 2,
+  ringSize: BASE_CONFIG.RING_START_SIZE,
   animFrame: null,
   hpTimer: null,
   firstRingSpawn: true,
@@ -386,38 +445,63 @@ const state = {
   shakeY: 0,
   shakeVelX: 0,
   shakeVelY: 0,
-  lightDotX: window.innerWidth / 2,
-  lightDotY: window.innerHeight / 2,
-  ringStayTimer: 0
+  lightDotX: winW / 2,
+  lightDotY: winH / 2,
+  ringStayTimer: 0,
+  tipShowTime: 0,
+  pageVisible: true,
+  refreshSec: BASE_CONFIG.BASE_REFRESH_SEC,
+  drainRate: BASE_CONFIG.BASE_DRAIN,
+  shrinkSpeed: BASE_CONFIG.BASE_SHRINK,
+  shakeRange: BASE_CONFIG.BASE_SHAKE_RANGE,
+  maskRadius: BASE_CONFIG.MASK_RADIUS_STAGE1,
+  isAdvanceRun: false // 标记本局是否为继续进度进阶局
 };
 
 const el = {
   body: document.body,
-  lightMask: document.querySelector(".light-mask"),
+  maskBg: document.getElementById("maskBg"),
   flashMask: document.getElementById("flashMask"),
   countText: document.getElementById("countText"),
   dot: document.getElementById("dot"),
   menuBox: document.getElementById("menuBox"),
   enterGameBtn: document.getElementById("enterGameBtn"),
+  continueBtn: document.getElementById("continueBtn"),
+  resetBtn: document.getElementById("resetBtn"),
   menuBest: document.getElementById("menuBest"),
+  roundText: document.getElementById("roundText"),
   resultPanel: document.getElementById("resultPanel"),
   newRecordTip: document.getElementById("newRecordTip"),
-  retryBtn: document.getElementById("retryBtn"),
+  primaryBtn: document.getElementById("primaryBtn"),
   homeBtn: document.getElementById("homeBtn"),
   gameUI: document.getElementById("gameUI"),
   gameTip: document.getElementById("gameTip"),
   ring: document.getElementById("ring"),
   hpBar: document.getElementById("hpBar"),
   currentTime: document.getElementById("currentTime"),
-  resultTitle: document.getElementById("resultTitle")
+  resultTitle: document.getElementById("resultTitle"),
+  resultSub: document.getElementById("resultSub")
 };
 
 let audioInst = null;
 function initAudio() {
+  if (audioInst) return audioInst;
   const audio = new Audio("bgm.mp3");
   audio.loop = true;
   audio.volume = 0.3;
+  audioInst = audio;
   return audio;
+}
+
+function saveProgress() {
+  localStorage.setItem("balanceSave", JSON.stringify(saveData));
+}
+
+function updateMenuUI() {
+  el.menuBest.textContent = saveData.bestScore.toFixed(2);
+  el.roundText.textContent = `当前轮次：第${saveData.currentRound}轮`;
+  el.continueBtn.style.display = saveData.unlockedAdvance ? "block" : "none";
+  el.resetBtn.style.display = saveData.currentRound > 1 ? "block" : "none";
 }
 
 function createRipple(x, y) {
@@ -437,44 +521,51 @@ function applyRingStyle() {
   el.ring.style.height = state.ringSize + "px";
 }
 
-document.addEventListener("mousemove", e => {
-  state.mouseX = e.clientX;
-  state.mouseY = e.clientY;
-});
-
+function setMousePos(x, y) {
+  state.mouseX = x;
+  state.mouseY = y;
+}
+document.addEventListener("mousemove", e => setMousePos(e.clientX, e.clientY));
 document.addEventListener("touchmove", e => {
   e.preventDefault();
-  const touch = e.touches[0];
-  state.mouseX = touch.clientX;
-  state.mouseY = touch.clientY;
+  const t = e.touches[0];
+  setMousePos(t.clientX, t.clientY);
 }, { passive: false });
 
+function getDist(x1, y1, x2, y2) {
+  const dx = x1 - x2;
+  const dy = y1 - y2;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
 function isInRing() {
-  const dx = state.lightDotX - state.ringX;
-  const dy = state.lightDotY - state.ringY;
-  const dist = Math.hypot(dx, dy);
-  const r = state.ringSize / 2;
-  return dist <= r - CONFIG.DOT_RADIUS;
+  const dist = getDist(state.lightDotX, state.lightDotY, state.ringX, state.ringY);
+  const realRadius = state.ringSize / 2;
+  return dist <= realRadius - BASE_CONFIG.DOT_RADIUS;
 }
 
 function refreshRing() {
+  const minX = BASE_CONFIG.GAME_AREA_LEFT;
+  const maxX = winW - BASE_CONFIG.GAME_AREA_LEFT;
+  const minY = BASE_CONFIG.GAME_AREA_TOP;
+  const maxY = winH - 100;
+
   let randomX, randomY;
   if (state.firstRingSpawn) {
-    randomX = window.innerWidth / 2;
-    randomY = window.innerHeight / 2;
+    randomX = winW / 2;
+    randomY = winH / 2;
   } else {
-    const rangeX = CONFIG.GAME_AREA_RIGHT - CONFIG.GAME_AREA_LEFT;
-    const rangeY = CONFIG.GAME_AREA_BOTTOM - CONFIG.GAME_AREA_TOP;
-    randomX = CONFIG.GAME_AREA_LEFT + Math.random() * rangeX;
-    randomY = CONFIG.GAME_AREA_TOP + Math.random() * rangeY;
+    randomX = minX + Math.random() * (maxX - minX);
+    randomY = minY + Math.random() * (maxY - minY);
   }
-  state.ringSize = CONFIG.RING_START_SIZE;
+  state.ringStayTimer = 0;
+  state.ringSize = BASE_CONFIG.RING_START_SIZE;
   state.ringX = randomX;
   state.ringY = randomY;
-  state.ringStayTimer = 0;
+
   if (!state.firstRingSpawn) {
     el.ring.classList.add("blink", "no-mask");
-    setTimeout(() => el.ring.classList.remove("blink", "no-mask"), CONFIG.BLINK_DELAY);
+    setTimeout(() => el.ring.classList.remove("blink", "no-mask"), BASE_CONFIG.BLINK_DELAY);
   }
   applyRingStyle();
   if (state.firstRingSpawn) state.firstRingSpawn = false;
@@ -482,23 +573,53 @@ function refreshRing() {
 
 function tickHP() {
   if (!state.playing || state.countingDown) return;
-  state.hp += isInRing() ? CONFIG.HEAL_RATE : -CONFIG.DRAIN_RATE;
-  state.hp = Math.max(CONFIG.MIN_HP, Math.min(CONFIG.MAX_HP, state.hp));
+  state.hp += isInRing() ? BASE_CONFIG.HEAL_RATE : -state.drainRate;
+  state.hp = Math.max(BASE_CONFIG.MIN_HP, Math.min(BASE_CONFIG.MAX_HP, state.hp));
+}
+
+function setMaskEffect() {
+  el.body.style.setProperty("--light-radius", state.maskRadius + "px");
+  if (saveData.currentRound >= 4) {
+    el.maskBg.classList.add("hide");
+  } else {
+    el.maskBg.classList.remove("hide");
+  }
+}
+
+function calcDifficulty(round) {
+  let refresh = BASE_CONFIG.BASE_REFRESH_SEC - (round - 1) * 0.2;
+  refresh = Math.max(refresh, BASE_CONFIG.MIN_REFRESH_SEC);
+  let drain = BASE_CONFIG.BASE_DRAIN + (round - 1) * 0.2;
+  drain = Math.min(drain, BASE_CONFIG.MAX_DRAIN);
+  let shrink = BASE_CONFIG.BASE_SHRINK + (round - 1) * 0.03;
+  shrink = Math.min(shrink, BASE_CONFIG.MAX_SHRINK);
+  let shake = BASE_CONFIG.BASE_SHAKE_RANGE + (round - 1) * 2;
+  shake = Math.min(shake, BASE_CONFIG.MAX_SHAKE_RANGE);
+  let maskR;
+  if (round === 1) maskR = BASE_CONFIG.MASK_RADIUS_STAGE1;
+  else if (round === 2) maskR = BASE_CONFIG.MASK_RADIUS_STAGE2;
+  else if (round === 3) maskR = BASE_CONFIG.MASK_RADIUS_STAGE3;
+  else maskR = 9999;
+  return { refresh, drain, shrink, shake, maskR };
 }
 
 function gameLoop() {
-  if (!state.playing) return;
-  const targetShakeX = (Math.random() - 0.5) * CONFIG.MAX_SHAKE_RANGE;
-  const targetShakeY = (Math.random() - 0.5) * CONFIG.MAX_SHAKE_RANGE;
-  state.shakeVelX += (targetShakeX - state.shakeX) * CONFIG.SHAKE_STIFFNESS;
-  state.shakeVelY += (targetShakeY - state.shakeY) * CONFIG.SHAKE_DAMPING;
-  state.shakeVelX *= (1 - CONFIG.SHAKE_DAMPING);
-  state.shakeVelY *= (1 - CONFIG.SHAKE_DAMPING);
+  if (!state.playing || !state.pageVisible) {
+    state.animFrame = requestAnimationFrame(gameLoop);
+    return;
+  }
+  const targetShakeX = (Math.random() - 0.5) * state.shakeRange;
+  const targetShakeY = (Math.random() - 0.5) * state.shakeRange;
+  state.shakeVelX += (targetShakeX - state.shakeX) * BASE_CONFIG.SHAKE_STIFFNESS;
+  state.shakeVelY += (targetShakeY - state.shakeY) * BASE_CONFIG.SHAKE_STIFFNESS;
+  state.shakeVelX *= (1 - BASE_CONFIG.SHAKE_DAMPING);
+  state.shakeVelY *= (1 - BASE_CONFIG.SHAKE_DAMPING);
   state.shakeX += state.shakeVelX;
   state.shakeY += state.shakeVelY;
-  const shakeDist = Math.hypot(state.shakeX, state.shakeY);
-  if (shakeDist > CONFIG.MAX_SHAKE_RANGE) {
-    const scale = CONFIG.MAX_SHAKE_RANGE / shakeDist;
+
+  const shakeDist = getDist(state.shakeX, state.shakeY, 0, 0);
+  if (shakeDist > state.shakeRange) {
+    const scale = state.shakeRange / shakeDist;
     state.shakeX *= scale;
     state.shakeY *= scale;
     state.shakeVelX *= 0.4;
@@ -506,35 +627,48 @@ function gameLoop() {
   }
   state.lightDotX = state.mouseX + state.shakeX;
   state.lightDotY = state.mouseY + state.shakeY;
+
   el.dot.style.left = state.lightDotX + "px";
   el.dot.style.top = state.lightDotY + "px";
   el.body.style.setProperty("--mouse-x", state.lightDotX + "px");
   el.body.style.setProperty("--mouse-y", state.lightDotY + "px");
 
   const pass = (Date.now() - state.startTime) / 1000;
-  state.remainTime = CONFIG.TOTAL_GAME_TIME - pass;
+  state.remainTime = BASE_CONFIG.TOTAL_GAME_TIME - pass;
   el.currentTime.textContent = state.remainTime.toFixed(2);
 
+  if (pass > state.tipShowTime + BASE_CONFIG.TIP_DISPLAY_SEC) {
+    el.gameTip.classList.add("fadeout");
+  }
+
   if (isInRing()) {
-    const deltaFrame = 1 / 60;
+    const deltaFrame = 1 / BASE_CONFIG.FRAME_RATE;
     state.ringStayTimer += deltaFrame;
-    if (state.ringStayTimer >= CONFIG.REFRESH_SECONDS) {
+    if (state.ringStayTimer >= state.refreshSec) {
       refreshRing();
     }
   }
 
-  let shrinkDelta = pass * CONFIG.RING_SHRINK_SPEED;
-  state.ringSize = Math.max(CONFIG.RING_MIN_SIZE, CONFIG.RING_START_SIZE - shrinkDelta);
+  const shrinkDelta = pass * state.shrinkSpeed;
+  state.ringSize = Math.max(BASE_CONFIG.RING_MIN_SIZE, BASE_CONFIG.RING_START_SIZE - shrinkDelta);
   applyRingStyle();
 
   if (state.remainTime <= 0) {
     endGame(true);
     return;
   }
-  state.smoothHp += (state.hp - state.smoothHp) * CONFIG.HP_LERP_SPEED;
-  state.smoothHp = Math.max(CONFIG.MIN_HP, Math.min(CONFIG.MAX_HP, state.smoothHp));
-  el.hpBar.style.width = state.smoothHp + "%";
-  if (state.smoothHp <= CONFIG.EPS) {
+
+  state.smoothHp += (state.hp - state.smoothHp) * BASE_CONFIG.HP_LERP_SPEED;
+  state.smoothHp = Math.max(BASE_CONFIG.MIN_HP, Math.min(BASE_CONFIG.MAX_HP, state.smoothHp));
+  const hpPercent = state.smoothHp;
+  el.hpBar.style.width = hpPercent + "%";
+  if (hpPercent <= BASE_CONFIG.HP_WARN_THRESHOLD) {
+    el.hpBar.classList.add("danger");
+  } else {
+    el.hpBar.classList.remove("danger");
+  }
+
+  if (state.smoothHp <= BASE_CONFIG.EPS) {
     endGame(false);
     return;
   }
@@ -547,16 +681,32 @@ function endGame(isWin) {
   cancelAnimationFrame(state.animFrame);
   clearInterval(state.hpTimer);
   if (audioInst) audioInst.pause();
-  const playTime = CONFIG.TOTAL_GAME_TIME - state.remainTime;
+  const playTime = BASE_CONFIG.TOTAL_GAME_TIME - state.remainTime;
   el.newRecordTip.style.display = "none";
-  el.resultTitle.textContent = isWin ? "挑战成功" : "挑战失败";
-  if (playTime > state.bestScore) {
-    state.bestScore = playTime;
-    localStorage.setItem("balanceMax", state.bestScore);
-    el.menuBest.textContent = state.bestScore.toFixed(2);
-    el.newRecordTip.style.display = "block";
+
+  // 区分普通局/进阶进度局，修改按钮文字
+  if (state.isAdvanceRun) {
+    el.primaryBtn.textContent = "继续游戏";
+  } else {
+    el.primaryBtn.textContent = "再来一局";
+  }
+
+  if (isWin) {
+    el.resultTitle.textContent = "挑战成功";
+    el.resultSub.textContent = `第${saveData.currentRound}轮通关`;
+    saveData.unlockedAdvance = true;
+    saveData.currentRound += 1;
+    if (playTime > saveData.bestScore) {
+      saveData.bestScore = playTime;
+      el.newRecordTip.style.display = "block";
+    }
+    saveProgress();
+  } else {
+    el.resultTitle.textContent = "挑战失败";
+    el.resultSub.textContent = `止步第${saveData.currentRound}轮`;
   }
   el.resultPanel.classList.add("show");
+  updateMenuUI();
 }
 
 function startCountdown(cb) {
@@ -572,7 +722,9 @@ function startCountdown(cb) {
       el.flashMask.classList.remove("show");
       state.countingDown = false;
       el.gameUI.classList.add("visible");
-      el.gameTip.classList.add("visible");
+      el.gameTip.classList.add("show");
+      state.tipShowTime = (Date.now() - state.startTime) / 1000;
+      setMaskEffect();
       if (audioInst) {
         audioInst.currentTime = 0;
         audioInst.play().catch(() => {});
@@ -587,56 +739,100 @@ function resetGame() {
     audioInst.pause();
     audioInst.currentTime = 0;
   }
-  state.hp = CONFIG.MAX_HP;
-  state.smoothHp = CONFIG.MAX_HP;
-  state.remainTime = CONFIG.TOTAL_GAME_TIME;
+  cancelAnimationFrame(state.animFrame);
+  clearInterval(state.hpTimer);
+
+  state.hp = BASE_CONFIG.MAX_HP;
+  state.smoothHp = BASE_CONFIG.MAX_HP;
+  state.remainTime = BASE_CONFIG.TOTAL_GAME_TIME;
   state.firstRingSpawn = true;
-  state.mouseX = window.innerWidth / 2;
-  state.mouseY = window.innerHeight / 2;
+  state.mouseX = winW / 2;
+  state.mouseY = winH / 2;
   state.shakeX = state.shakeY = state.shakeVelX = state.shakeVelY = 0;
   state.lightDotX = state.mouseX;
   state.lightDotY = state.mouseY;
-  state.ringSize = CONFIG.RING_START_SIZE;
+  state.ringSize = BASE_CONFIG.RING_START_SIZE;
   state.ringStayTimer = 0;
+  state.tipShowTime = 0;
+
   el.hpBar.style.width = state.smoothHp + "%";
+  el.hpBar.classList.remove("danger");
   el.currentTime.textContent = state.remainTime.toFixed(2);
   el.dot.style.left = state.lightDotX + "px";
   el.dot.style.top = state.lightDotY + "px";
   el.body.style.setProperty("--mouse-x", state.lightDotX + "px");
   el.body.style.setProperty("--mouse-y", state.lightDotY + "px");
+
   el.resultPanel.classList.remove("show");
   el.gameUI.classList.remove("visible");
-  el.gameTip.classList.remove("visible");
-  clearInterval(state.hpTimer);
-  cancelAnimationFrame(state.animFrame);
+  el.gameTip.classList.remove("show", "fadeout");
+  el.maskBg.classList.remove("hide");
   refreshRing();
 }
 
-function launchGame() {
+function launchGame(targetRound, isAdvance) {
   resetGame();
-  if (!audioInst) audioInst = initAudio();
+  initAudio();
+  const diff = calcDifficulty(targetRound);
+  state.refreshSec = diff.refresh;
+  state.drainRate = diff.drain;
+  state.shrinkSpeed = diff.shrink;
+  state.shakeRange = diff.shake;
+  state.maskRadius = diff.maskR;
+  state.isAdvanceRun = isAdvance;
+
   el.menuBox.classList.add("hidden");
   startCountdown(() => {
     state.playing = true;
     state.startTime = Date.now();
-    state.hpTimer = setInterval(tickHP, CONFIG.HP_TICK_MS);
+    state.hpTimer = setInterval(tickHP, BASE_CONFIG.HP_TICK_MS);
     gameLoop();
   });
 }
 
-el.enterGameBtn.addEventListener("click", launchGame);
-el.retryBtn.addEventListener("click", launchGame);
+// 开始游戏：普通第1轮，标记非进阶
+el.enterGameBtn.addEventListener("click", () => {
+  saveData.currentRound = 1;
+  saveProgress();
+  launchGame(1, false);
+});
+// 继续进度：进阶轮次，标记为进阶局
+el.continueBtn.addEventListener("click", () => {
+  launchGame(saveData.currentRound, true);
+});
+// 重置进度
+el.resetBtn.addEventListener("click", () => {
+  saveData = { bestScore: saveData.bestScore, currentRound: 1, unlockedAdvance: false };
+  saveProgress();
+  updateMenuUI();
+});
+// 再来一局/继续游戏按钮：延续当前轮次与类型
+el.primaryBtn.addEventListener("click", () => {
+  launchGame(saveData.currentRound, state.isAdvanceRun);
+});
+// 返回大厅
 el.homeBtn.addEventListener("click", () => {
   resetGame();
   if (audioInst) audioInst.pause();
   el.menuBox.classList.remove("hidden");
 });
 
+document.addEventListener("visibilitychange", () => {
+  state.pageVisible = !document.hidden;
+  if (!state.pageVisible && audioInst) audioInst.pause();
+  else if (state.pageVisible && state.playing && !state.countingDown) audioInst.play().catch(()=>{});
+});
+
+window.addEventListener("resize", () => {
+  winW = window.innerWidth;
+  winH = window.innerHeight;
+});
+
+updateMenuUI();
 el.body.style.setProperty("--mouse-x", state.mouseX + "px");
 el.body.style.setProperty("--mouse-y", state.mouseY + "px");
-el.menuBest.textContent = state.bestScore.toFixed(2);
-el.currentTime.textContent = state.remainTime.toFixed(2);
 applyRingStyle();
+state.animFrame = requestAnimationFrame(gameLoop);
 </script>
 </body>
 </html>
