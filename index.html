@@ -81,6 +81,63 @@ body {
   pointer-events: all;
   background: transparent !important;
 }
+/* 暂停弹窗 */
+.pause-panel {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 70;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.pause-panel.show {
+  opacity: 1;
+  pointer-events: all;
+}
+.pause-box {
+  background: var(--card-bg);
+  padding: 48px 60px;
+  border-radius: 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.pause-title {
+  font-size: 42px;
+  font-weight: 600;
+}
+.pause-btn-group {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.pause-btn {
+  padding: 14px 40px;
+  font-size: 22px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+}
+.pause-continue {
+  background: var(--text);
+  color: var(--bg);
+}
+.pause-restart {
+  background: #2277dd;
+  color: #fff;
+}
+.pause-home {
+  background: #dd3333;
+  color: #fff;
+}
+.pause-btn:hover {
+  scale: 1.05;
+}
 .start-menu {
   position: fixed;
   inset: 0;
@@ -347,6 +404,18 @@ body {
 <div class="mouse-dot" id="dot"></div>
 <div class="light-mask" id="maskBg"></div>
 
+<!-- 暂停弹窗 -->
+<div class="pause-panel" id="pausePanel">
+  <div class="pause-box">
+    <h2 class="pause-title">游戏暂停</h2>
+    <div class="pause-btn-group">
+      <button class="pause-btn pause-continue" id="pauseContinue">继续游戏</button>
+      <button class="pause-btn pause-restart" id="pauseRestart">重新开始</button>
+      <button class="pause-btn pause-home" id="pauseHome">返回大厅</button>
+    </div>
+  </div>
+</div>
+
 <div class="start-menu" id="menuBox">
   <h1 class="menu-title">稳态平衡挑战</h1>
   <p class="menu-desc">移动鼠标灯光，圈内回血，圈外扣血；累计停留圈内自动刷新判定圈</p>
@@ -431,7 +500,9 @@ let saveData = JSON.parse(localStorage.getItem("balanceSave")) || {
 const state = {
   playing: false,
   countingDown: false,
+  isPaused: false, // 暂停标记
   startTime: 0,
+  pauseTimeOffset: 0, // 暂停时长补偿时间
   remainTime: BASE_CONFIG.TOTAL_GAME_TIME,
   mouseX: winW / 2,
   mouseY: winH / 2,
@@ -455,7 +526,7 @@ const state = {
   shrinkSpeed: BASE_CONFIG.BASE_SHRINK,
   shakeRange: BASE_CONFIG.BASE_SHAKE_RANGE,
   maskRadius: BASE_CONFIG.MASK_RADIUS_STAGE1,
-  isAdvanceRun: false // 标记本局是否为继续进度进阶局
+  isAdvanceRun: false
 };
 
 const el = {
@@ -480,7 +551,12 @@ const el = {
   hpBar: document.getElementById("hpBar"),
   currentTime: document.getElementById("currentTime"),
   resultTitle: document.getElementById("resultTitle"),
-  resultSub: document.getElementById("resultSub")
+  resultSub: document.getElementById("resultSub"),
+  // 暂停DOM
+  pausePanel: document.getElementById("pausePanel"),
+  pauseContinue: document.getElementById("pauseContinue"),
+  pauseRestart: document.getElementById("pauseRestart"),
+  pauseHome: document.getElementById("pauseHome")
 };
 
 let audioInst = null;
@@ -572,7 +648,7 @@ function refreshRing() {
 }
 
 function tickHP() {
-  if (!state.playing || state.countingDown) return;
+  if (!state.playing || state.countingDown || state.isPaused) return;
   state.hp += isInRing() ? BASE_CONFIG.HEAL_RATE : -state.drainRate;
   state.hp = Math.max(BASE_CONFIG.MIN_HP, Math.min(BASE_CONFIG.MAX_HP, state.hp));
 }
@@ -603,8 +679,28 @@ function calcDifficulty(round) {
   return { refresh, drain, shrink, shake, maskR };
 }
 
+// 暂停/恢复
+function togglePause() {
+  // 不可暂停状态：未开局、倒计时中、结算弹窗打开
+  if (!state.playing || state.countingDown || el.resultPanel.classList.contains("show")) return;
+  if (state.isPaused) {
+    // 恢复游戏
+    state.isPaused = false;
+    const pauseDuration = (Date.now() - state.pauseTimeOffset) / 1000;
+    state.startTime += pauseDuration * 1000;
+    el.pausePanel.classList.remove("show");
+    if (audioInst) audioInst.play().catch(()=>{});
+  } else {
+    // 暂停游戏
+    state.isPaused = true;
+    state.pauseTimeOffset = Date.now();
+    el.pausePanel.classList.add("show");
+    if (audioInst) audioInst.pause();
+  }
+}
+
 function gameLoop() {
-  if (!state.playing || !state.pageVisible) {
+  if (!state.playing || !state.pageVisible || state.isPaused) {
     state.animFrame = requestAnimationFrame(gameLoop);
     return;
   }
@@ -684,7 +780,6 @@ function endGame(isWin) {
   const playTime = BASE_CONFIG.TOTAL_GAME_TIME - state.remainTime;
   el.newRecordTip.style.display = "none";
 
-  // 区分普通局/进阶进度局，修改按钮文字
   if (state.isAdvanceRun) {
     el.primaryBtn.textContent = "继续游戏";
   } else {
@@ -754,6 +849,7 @@ function resetGame() {
   state.ringSize = BASE_CONFIG.RING_START_SIZE;
   state.ringStayTimer = 0;
   state.tipShowTime = 0;
+  state.isPaused = false;
 
   el.hpBar.style.width = state.smoothHp + "%";
   el.hpBar.classList.remove("danger");
@@ -764,6 +860,7 @@ function resetGame() {
   el.body.style.setProperty("--mouse-y", state.lightDotY + "px");
 
   el.resultPanel.classList.remove("show");
+  el.pausePanel.classList.remove("show");
   el.gameUI.classList.remove("visible");
   el.gameTip.classList.remove("show", "fadeout");
   el.maskBg.classList.remove("hide");
@@ -790,27 +887,39 @@ function launchGame(targetRound, isAdvance) {
   });
 }
 
-// 开始游戏：普通第1轮，标记非进阶
+// 键盘ESC暂停
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") togglePause();
+});
+
+// 暂停按钮事件
+el.pauseContinue.addEventListener("click", togglePause);
+el.pauseRestart.addEventListener("click", () => {
+  launchGame(saveData.currentRound, state.isAdvanceRun);
+});
+el.pauseHome.addEventListener("click", () => {
+  resetGame();
+  el.menuBox.classList.remove("hidden");
+});
+
+// 菜单按钮
 el.enterGameBtn.addEventListener("click", () => {
   saveData.currentRound = 1;
   saveProgress();
   launchGame(1, false);
 });
-// 继续进度：进阶轮次，标记为进阶局
 el.continueBtn.addEventListener("click", () => {
   launchGame(saveData.currentRound, true);
 });
-// 重置进度
 el.resetBtn.addEventListener("click", () => {
   saveData = { bestScore: saveData.bestScore, currentRound: 1, unlockedAdvance: false };
   saveProgress();
   updateMenuUI();
 });
-// 再来一局/继续游戏按钮：延续当前轮次与类型
+// 结算主按钮
 el.primaryBtn.addEventListener("click", () => {
   launchGame(saveData.currentRound, state.isAdvanceRun);
 });
-// 返回大厅
 el.homeBtn.addEventListener("click", () => {
   resetGame();
   if (audioInst) audioInst.pause();
@@ -819,8 +928,9 @@ el.homeBtn.addEventListener("click", () => {
 
 document.addEventListener("visibilitychange", () => {
   state.pageVisible = !document.hidden;
-  if (!state.pageVisible && audioInst) audioInst.pause();
-  else if (state.pageVisible && state.playing && !state.countingDown) audioInst.play().catch(()=>{});
+  if (!state.pageVisible && state.playing && !state.isPaused) {
+    togglePause();
+  }
 });
 
 window.addEventListener("resize", () => {
